@@ -3,12 +3,20 @@ package io.github.zhlzxa.corebanking.transfer;
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
+import io.github.zhlzxa.corebanking.audit.AuditContext;
+import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
+import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
+import io.github.zhlzxa.corebanking.audit.AuditOutcome;
+import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
+import io.github.zhlzxa.corebanking.common.error.BusinessException;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transaction.NewTransaction;
 import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
 import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Executes internal transfers on the double-entry ledger.
  *
  * <p>A transfer is a single database transaction that either applies completely or not at all:
- * both balance updates, both ledger legs and the transaction status change commit together. Any
- * exception rolls everything back, including the transaction row that claimed the request id, so
- * a rejected request can be retried with the same key.
+ * both balance updates, both ledger legs, the transaction status change and the success audit
+ * event commit together. Any exception rolls everything back, including the transaction row that
+ * claimed the request id, so a rejected request can be retried with the same key.
  *
  * <p>Concurrency is controlled with pessimistic row locks. Both accounts are locked in ascending
  * id order regardless of transfer direction, so two opposite transfers between the same accounts
@@ -33,8 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
  * to the caller. An account that exists but belongs to someone else is reported exactly like a
  * missing one, so that account identifiers cannot be probed.
  *
- * <p>Business rules are evaluated only for a newly claimed request. A retry of an already
- * processed request returns the original outcome even if an account has changed since.
+ * <p>Auditing follows the transaction boundary. A completed transfer is audited inside the
+ * transfer transaction, so money never moves without an audit record. A rejected or failed attempt
+ * is audited in an independent transaction, so the record survives the rollback. An idempotent
+ * retry is not audited again.
  */
 @Service
 public class TransferService {
@@ -44,20 +54,30 @@ public class TransferService {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final LedgerRepository ledgerRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final AuditEventFactory auditEventFactory;
+    private final IndependentAuditRecorder independentAuditRecorder;
 
     public TransferService(
             AccountRepository accountRepository,
             TransactionRepository transactionRepository,
-            LedgerRepository ledgerRepository) {
+            LedgerRepository ledgerRepository,
+            AuditEventRepository auditEventRepository,
+            AuditEventFactory auditEventFactory,
+            IndependentAuditRecorder independentAuditRecorder) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.ledgerRepository = ledgerRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.auditEventFactory = auditEventFactory;
+        this.independentAuditRecorder = independentAuditRecorder;
     }
 
     /**
      * Transfers money between two accounts, or returns the original result if the request id was
      * already processed with the same instruction.
      *
+     * @param audit who is acting, through which channel, under which correlation id
      * @return the completed transaction
      * @throws InvalidTransferException if the instruction is structurally invalid
      * @throws IdempotencyConflictException if the request id was used for another instruction
@@ -68,7 +88,16 @@ public class TransferService {
      */
     @Transactional
     @PreAuthorize("hasAuthority('SCOPE_bank.transfer') and hasRole('CUSTOMER')")
-    public BankTransaction transfer(TransferCommand command) {
+    public BankTransaction transfer(AuditContext audit, TransferCommand command) {
+        try {
+            return execute(audit, command);
+        } catch (RuntimeException ex) {
+            recordUnsuccessfulAttempt(audit, command, ex);
+            throw ex;
+        }
+    }
+
+    private BankTransaction execute(AuditContext audit, TransferCommand command) {
         validate(command);
 
         // Locks are taken before the request id is claimed: the transaction row references both
@@ -89,7 +118,6 @@ public class TransferService {
 
         Account source = accounts.source();
         Account destination = accounts.destination();
-
         if (!source.currency().equals(command.currency())
                 || !destination.currency().equals(command.currency())) {
             throw new CurrencyMismatchException();
@@ -104,6 +132,7 @@ public class TransferService {
         ledgerRepository.append(
                 LedgerEntry.credit(transactionId, destination.id(), command.amount(), command.currency()));
         transactionRepository.updateStatus(transactionId, TransactionStatus.COMPLETED);
+        auditEventRepository.append(auditEventFactory.transferCompleted(audit, command.requestId(), transactionId));
 
         log.info("Transfer completed: transactionId={}", transactionId);
         return transactionRepository
@@ -141,6 +170,35 @@ public class TransferService {
         Account first = accountRepository.findByIdForUpdate(firstId).orElseThrow(AccountNotFoundException::new);
         Account second = accountRepository.findByIdForUpdate(secondId).orElseThrow(AccountNotFoundException::new);
         return first.id() == fromAccountId ? new LockedAccounts(first, second) : new LockedAccounts(second, first);
+    }
+
+    /**
+     * Records a rejected or failed attempt without affecting its outcome. The caller always sees the
+     * original exception: if the audit write itself fails, that is logged for operations but must
+     * not turn a business rejection into a technical error.
+     */
+    private void recordUnsuccessfulAttempt(AuditContext audit, TransferCommand command, RuntimeException cause) {
+        AuditOutcome outcome;
+        String reasonCode;
+        if (cause instanceof BusinessException business) {
+            outcome = AuditOutcome.REJECTED;
+            reasonCode = business.errorCode().name();
+        } else {
+            outcome = AuditOutcome.FAILED;
+            reasonCode = ErrorCode.INTERNAL_ERROR.name();
+        }
+        Map<String, Object> instruction = Map.of(
+                "fromAccountId", command.fromAccountId(),
+                "toAccountId", command.toAccountId(),
+                "amount", command.amount() == null ? "" : command.amount().toPlainString(),
+                "currency", String.valueOf(command.currency()));
+        try {
+            independentAuditRecorder.record(auditEventFactory.transferUnsuccessful(
+                    audit, command.requestId(), outcome, reasonCode, instruction));
+        } catch (RuntimeException auditFailure) {
+            log.error(
+                    "Failed to record audit event for unsuccessful transfer: reasonCode={}", reasonCode, auditFailure);
+        }
     }
 
     private record LockedAccounts(Account source, Account destination) {}

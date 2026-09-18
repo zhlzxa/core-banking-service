@@ -1,8 +1,11 @@
 package io.github.zhlzxa.corebanking.transfer.web;
 
+import io.github.zhlzxa.corebanking.audit.AuditChannel;
+import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.security.BankPrincipal;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transfer.TransferService;
+import io.github.zhlzxa.corebanking.web.CorrelationId;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,7 +34,9 @@ public class TransferController {
     @ResponseStatus(HttpStatus.CREATED)
     public TransferResponse transfer(
             @AuthenticationPrincipal BankPrincipal caller, @Valid @RequestBody TransferRequest request) {
-        BankTransaction transaction = transferService.transfer(request.toCommand(caller.userId()));
+        AuditContext audit =
+                new AuditContext(caller.toAuditActor(), CorrelationId.current().orElse(null), AuditChannel.API);
+        BankTransaction transaction = transferService.transfer(audit, request.toCommand(caller.userId()));
         return TransferResponse.from(transaction);
     }
 }

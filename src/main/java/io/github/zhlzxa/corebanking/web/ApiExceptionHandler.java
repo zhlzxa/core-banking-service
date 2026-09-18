@@ -43,18 +43,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * Method-level authorization failures are raised inside the controller call and would otherwise
-     * be caught by the generic handler below and reported as 500.
+     * Security exceptions raised inside a controller call, for example by {@code @PreAuthorize}, are
+     * rethrown so that they propagate to the security filter chain. There they are answered and
+     * audited exactly like rejections of URL rules, instead of being caught by the generic handler
+     * below and reported as 500.
      */
-    @ExceptionHandler(AccessDeniedException.class)
-    ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
-        return respond(
-                ProblemDetails.of(ErrorCode.ACCESS_DENIED, "The caller is not permitted to perform this operation"));
-    }
-
-    @ExceptionHandler(AuthenticationException.class)
-    ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex) {
-        return respond(ProblemDetails.of(ErrorCode.UNAUTHENTICATED, "Authentication is required"));
+    @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
+    void propagateSecurityException(Exception ex) throws Exception {
+        throw ex;
     }
 
     /** Last resort: the cause is logged with the correlation id, the client only learns that it failed. */
