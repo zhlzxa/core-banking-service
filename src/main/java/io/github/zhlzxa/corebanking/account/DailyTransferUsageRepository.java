@@ -16,4 +16,10 @@ public interface DailyTransferUsageRepository {
      * @return {@code true} if the amount was consumed, {@code false} if it would exceed the limit
      */
     boolean tryConsume(long accountId, LocalDate businessDay, BigDecimal amount, BigDecimal limit);
+
+    /**
+     * Gives back a share of the limit consumed on that business day, for a movement that was
+     * reversed after it had committed. A day without recorded usage is left untouched.
+     */
+    void release(long accountId, LocalDate businessDay, BigDecimal amount);
 }

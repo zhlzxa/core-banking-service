@@ -7,5 +7,9 @@ public enum TransactionType {
     /** Cash paid in: from the bank's cash account to a customer account. */
     DEPOSIT,
     /** Cash paid out: from a customer account to the bank's cash account. */
-    WITHDRAWAL
+    WITHDRAWAL,
+    /** To another bank through FPS: from a customer account to the FPS clearing account. */
+    FPS_PAYMENT,
+    /** Undoes a completed posting with offsetting entries; references the original transaction. */
+    REVERSAL
 }

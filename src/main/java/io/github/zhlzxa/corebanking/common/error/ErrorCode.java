@@ -21,6 +21,7 @@ public enum ErrorCode {
     CURRENCY_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "Currency not supported"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Account not found"),
     TRANSFER_NOT_FOUND(HttpStatus.NOT_FOUND, "Transfer not found"),
+    PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Payment not found"),
     PAYEE_NOT_FOUND(HttpStatus.NOT_FOUND, "Payee not found"),
     APPROVAL_NOT_FOUND(HttpStatus.NOT_FOUND, "Approval not found"),
     INSUFFICIENT_BALANCE(HttpStatus.CONFLICT, "Insufficient balance"),

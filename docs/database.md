@@ -11,6 +11,7 @@ erDiagram
     users ||--o{ accounts : "owns"
     users ||--o{ transactions : "initiates"
     accounts ||--o{ transactions : "from / to"
+    transactions ||--o| transactions : "reversed by"
     accounts ||--o{ ledger_entries : "posted to"
     transactions ||--|{ ledger_entries : "balanced by"
     users ||--o{ audit_events : "acted"
@@ -48,6 +49,10 @@ erDiagram
         bigint id PK
         varchar request_id UK "idempotency key"
         bigint initiated_by_user_id FK
+        varchar end_to_end_id UK "FPS payments"
+        varchar external_status "NOT_SENT, SENT, ACCEPTED, REJECTED, UNKNOWN"
+        timestamptz next_attempt_at "reconciliation schedule"
+        bigint original_transaction_id FK "reversals only, unique"
         varchar transaction_type
         varchar status
         bigint from_account_id FK
@@ -120,6 +125,8 @@ erDiagram
 | A frozen account records why | `ck_accounts_frozen_has_reason` |
 | Status and reason come from closed sets | `ck_accounts_status`, `ck_accounts_status_reason` |
 | Limits are positive | `ck_accounts_limits_positive` |
+| An FPS payment carries its end-to-end id and destination once posted | `ck_transactions_fps_fields` |
+| A transaction is reversed at most once | `uq_transactions_reversal_once` |
 | A withdrawal is never approved by the teller who requested it | `ck_withdrawal_approvals_four_eyes` |
 | An approval decision records who decided, when, and the executing transaction | `ck_withdrawal_approvals_decision` |
 | A customer saves each destination once | `uq_payees_owner_destination` (`NULLS NOT DISTINCT`) |
@@ -154,6 +161,7 @@ columns automatically.
 | `idx_audit_events_request_id` | What happened to a client request, including rejected ones |
 | `idx_audit_events_on_behalf_time` | Everything performed on behalf of a customer |
 | `idx_withdrawal_approvals_pending` | Pending approvals at a branch (partial index) |
+| `idx_transactions_reconciliation` | Unresolved FPS payments that are due (partial index) |
 | `idx_audit_events_action_time` | All events of a kind in a period, for example failed logins |
 
 Query plans are inspected with `QueryPlanInvestigationIT`, which is disabled in
@@ -181,3 +189,4 @@ units.
 | V7 | Internal accounts (cash), deposit and withdrawal types, on-behalf-of audit attribution |
 | V8 | Four-eyes approval of large teller withdrawals |
 | V9 | Self-service terminal identities |
+| V10 | FPS payment tracking, reversals, FPS clearing accounts, SYSTEM audit channel |

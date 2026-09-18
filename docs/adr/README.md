@@ -15,6 +15,8 @@ that changes is superseded by a new record.
 | [0006](0006-explicit-sql-for-the-ledger-jpa-for-reference-data.md) | Use explicit SQL for the ledger and JPA only for reference data | Accepted |
 | [0007](0007-enforce-cumulative-limits-with-an-atomic-conditional-upsert.md) | Enforce cumulative limits with an atomic conditional upsert | Accepted |
 | [0008](0008-attribute-staff-and-machine-actions-to-the-customer.md) | Attribute staff and machine actions to the customer they serve | Accepted |
+| [0009](0009-treat-payment-timeouts-as-unknown-and-reconcile.md) | Treat external payment timeouts as unknown and resolve them by reconciliation | Accepted |
+| [0010](0010-correct-postings-with-reversal-transactions.md) | Correct postings with reversal transactions, never by editing the ledger | Accepted |
 
 ## Template
 

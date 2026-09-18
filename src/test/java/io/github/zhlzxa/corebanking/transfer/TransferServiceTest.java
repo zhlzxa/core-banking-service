@@ -37,6 +37,7 @@ import io.github.zhlzxa.corebanking.posting.IdempotencyConflictException;
 import io.github.zhlzxa.corebanking.posting.IdempotentTransactions;
 import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
 import io.github.zhlzxa.corebanking.posting.LedgerPoster;
+import io.github.zhlzxa.corebanking.posting.OutgoingLimits;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
 import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
@@ -106,8 +107,7 @@ class TransferServiceTest {
                 new AccountLocks(accountRepository),
                 new IdempotentTransactions(transactionRepository),
                 new LedgerPoster(accountRepository, ledgerRepository, transactionRepository),
-                dailyTransferUsageRepository,
-                businessCalendar,
+                new OutgoingLimits(dailyTransferUsageRepository, businessCalendar),
                 auditEventRepository,
                 auditEventFactory,
                 bestEffortAuditRecorder);

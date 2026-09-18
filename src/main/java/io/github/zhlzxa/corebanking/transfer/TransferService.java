@@ -2,14 +2,12 @@ package io.github.zhlzxa.corebanking.transfer;
 
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
-import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.audit.BestEffortAuditRecorder;
 import io.github.zhlzxa.corebanking.audit.MovementKind;
 import io.github.zhlzxa.corebanking.common.money.CurrencyUnits;
-import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.posting.AccountLocks;
 import io.github.zhlzxa.corebanking.posting.AccountLocks.LockedPair;
 import io.github.zhlzxa.corebanking.posting.AccountRuleViolationException;
@@ -19,6 +17,7 @@ import io.github.zhlzxa.corebanking.posting.IdempotentTransactions;
 import io.github.zhlzxa.corebanking.posting.IdempotentTransactions.Claim;
 import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
 import io.github.zhlzxa.corebanking.posting.LedgerPoster;
+import io.github.zhlzxa.corebanking.posting.OutgoingLimits;
 import io.github.zhlzxa.corebanking.security.Permissions;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import java.util.Map;
@@ -58,8 +57,7 @@ public class TransferService {
     private final AccountLocks accountLocks;
     private final IdempotentTransactions idempotentTransactions;
     private final LedgerPoster ledgerPoster;
-    private final DailyTransferUsageRepository dailyTransferUsageRepository;
-    private final BusinessCalendar businessCalendar;
+    private final OutgoingLimits outgoingLimits;
     private final AuditEventRepository auditEventRepository;
     private final AuditEventFactory auditEventFactory;
     private final BestEffortAuditRecorder bestEffortAuditRecorder;
@@ -68,16 +66,14 @@ public class TransferService {
             AccountLocks accountLocks,
             IdempotentTransactions idempotentTransactions,
             LedgerPoster ledgerPoster,
-            DailyTransferUsageRepository dailyTransferUsageRepository,
-            BusinessCalendar businessCalendar,
+            OutgoingLimits outgoingLimits,
             AuditEventRepository auditEventRepository,
             AuditEventFactory auditEventFactory,
             BestEffortAuditRecorder bestEffortAuditRecorder) {
         this.accountLocks = accountLocks;
         this.idempotentTransactions = idempotentTransactions;
         this.ledgerPoster = ledgerPoster;
-        this.dailyTransferUsageRepository = dailyTransferUsageRepository;
-        this.businessCalendar = businessCalendar;
+        this.outgoingLimits = outgoingLimits;
         this.auditEventRepository = auditEventRepository;
         this.auditEventFactory = auditEventFactory;
         this.bestEffortAuditRecorder = bestEffortAuditRecorder;
@@ -147,14 +143,7 @@ public class TransferService {
         if (!source.hasSufficientBalanceFor(command.amount())) {
             throw new InsufficientBalanceException();
         }
-        if (source.exceedsPerTransactionLimit(command.amount())) {
-            throw AccountRuleViolationException.limitExceeded();
-        }
-        if (source.dailyTransferLimit() != null
-                && !dailyTransferUsageRepository.tryConsume(
-                        source.id(), businessCalendar.today(), command.amount(), source.dailyTransferLimit())) {
-            throw AccountRuleViolationException.limitExceeded();
-        }
+        outgoingLimits.consume(source, command.amount());
 
         BankTransaction completed =
                 ledgerPoster.post(transactionId, source.id(), destination.id(), command.amount(), command.currency());

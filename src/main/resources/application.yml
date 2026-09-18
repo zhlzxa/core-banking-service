@@ -58,3 +58,16 @@ corebanking:
     approval-validity: 30m
     # The most a terminal may pay out in a single withdrawal.
     atm-withdrawal-limit: 20000
+  # Payments to other banks through FPS. A timeout never refunds the customer;
+  # reconciliation asks FPS for the outcome with increasing back-off and
+  # escalates to people after max-attempts.
+  fps:
+    client: simulated
+    submission-grace: 1m
+    retry-backoff: 30s, 1m, 2m, 5m, 15m, 30m
+    max-attempts: 20
+    reconciliation-lease: 2m
+    reconciliation-batch-size: 50
+    reconciliation:
+      enabled: true
+      interval: 30s

@@ -40,11 +40,26 @@ public class LedgerPoster {
      */
     public BankTransaction post(
             long transactionId, long debitAccountId, long creditAccountId, BigDecimal amount, String currency) {
+        return post(transactionId, debitAccountId, creditAccountId, amount, currency, TransactionStatus.COMPLETED);
+    }
+
+    /**
+     * Posts like {@link #post(long, long, long, BigDecimal, String)} but leaves the transaction in
+     * the given status, for movements whose final outcome is decided elsewhere, such as a payment
+     * waiting for an external network.
+     */
+    public BankTransaction post(
+            long transactionId,
+            long debitAccountId,
+            long creditAccountId,
+            BigDecimal amount,
+            String currency,
+            TransactionStatus resultingStatus) {
         accountRepository.debit(debitAccountId, amount);
         accountRepository.credit(creditAccountId, amount);
         ledgerRepository.append(LedgerEntry.debit(transactionId, debitAccountId, amount, currency));
         ledgerRepository.append(LedgerEntry.credit(transactionId, creditAccountId, amount, currency));
-        transactionRepository.updateStatus(transactionId, TransactionStatus.COMPLETED);
+        transactionRepository.updateStatus(transactionId, resultingStatus);
         return transactionRepository
                 .findById(transactionId)
                 .orElseThrow(() -> new IllegalStateException("Transaction " + transactionId + " vanished"));

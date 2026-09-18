@@ -8,7 +8,9 @@ public enum MovementKind {
     CASH_WITHDRAWAL(
             AuditAction.CASH_WITHDRAWAL_COMPLETED,
             AuditAction.CASH_WITHDRAWAL_REJECTED,
-            AuditAction.CASH_WITHDRAWAL_FAILED);
+            AuditAction.CASH_WITHDRAWAL_FAILED),
+    /** Completion means the customer was debited and the payment handed to FPS. */
+    FPS_PAYMENT(AuditAction.FPS_PAYMENT_SUBMITTED, AuditAction.FPS_PAYMENT_REJECTED, AuditAction.FPS_PAYMENT_FAILED);
 
     private final AuditAction completed;
     private final AuditAction rejected;

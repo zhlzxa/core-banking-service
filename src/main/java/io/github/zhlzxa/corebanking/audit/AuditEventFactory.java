@@ -145,6 +145,30 @@ public class AuditEventFactory {
                 details);
     }
 
+    /**
+     * The outcome of a payment to another bank became known, or its resolution was escalated.
+     *
+     * @param onBehalfOfUserId the customer who made the payment
+     */
+    public AuditEvent paymentOutcome(
+            AuditContext context,
+            AuditAction action,
+            long transactionId,
+            @Nullable Long onBehalfOfUserId,
+            Map<String, Object> details) {
+        return event(
+                context,
+                onBehalfOfUserId,
+                action,
+                TRANSACTION,
+                Long.toString(transactionId),
+                transactionId,
+                null,
+                AuditOutcome.SUCCESS,
+                null,
+                details);
+    }
+
     /** A request was stopped by authentication or authorization before any business logic ran. */
     public AuditEvent securityRejected(AuditContext context, AuditAction action, String path, String reasonCode) {
         return event(

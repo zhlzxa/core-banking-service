@@ -13,7 +13,7 @@
 
     <groupId>io.github.zhlzxa</groupId>
     <artifactId>core-banking-service</artifactId>
-    <version>0.9.0</version>
+    <version>0.10.0</version>
     <name>core-banking-service</name>
     <description>Core banking backend: accounts, double-entry ledger, transfers and payments</description>
 

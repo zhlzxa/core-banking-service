@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-18
+
+### Added
+
+- FPS payments to other banks (`POST /fps/payments`, `GET /fps/payments/{id}`)
+  in three phases: local debit, send outside any transaction, record outcome.
+- Timeouts never refund: payments stay `PROCESSING` and a lease-based
+  reconciler resolves them with FPS, resends payments FPS never received with
+  the same end-to-end id, and escalates to `NEEDS_INVESTIGATION` after the
+  maximum number of attempts.
+- Rejected payments are returned with reversal transactions and release their
+  share of the daily limit.
+- Simulated FPS network for local runs, with reproducible rejection, timeout
+  and lost-request behaviour.
+- ADR-0009 and ADR-0010.
+
+### Changed
+
+- Outgoing per-transaction and daily limits are enforced by a shared
+  component for transfers and FPS payments.
+
 ## [0.9.0] - 2026-09-18
 
 ### Added
@@ -165,7 +186,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.6.0...v0.7.0
