@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-18
+
+### Added
+
+- OAuth2 resource server authentication with RS256 JWTs from an external
+  OpenID Connect provider, validating signature, issuer, audience and expiry.
+- Bank users identified by external (issuer, subject) with bank-owned roles
+  and statuses; unknown, locked and disabled users are rejected.
+- Three-layer authorization for transfers: OAuth scope `bank.transfer`, role
+  `CUSTOMER` and ownership of the source account.
+- The initiating user is recorded on every transaction and included in the
+  idempotency comparison.
+- ADR-0003 describing the authentication and authorization model.
+
+### Changed
+
+- `POST /transfers` requires a bearer token. Accounts of other customers and
+  bank-internal destination accounts are reported as `ACCOUNT_NOT_FOUND`.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added
@@ -37,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/zhlzxa/core-banking-service/releases/tag/v0.1.0
