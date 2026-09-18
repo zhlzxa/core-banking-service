@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- OpenAPI description and Swagger UI, generated with the error codes of
+  each operation; disabled by default and enabled in the dev and demo
+  profiles.
+- Container image: multi-stage build, JRE-only base, unprivileged user,
+  layered for caching.
+- Demo environment: the service in compose next to PostgreSQL and Kafka,
+  sample customers, tellers, an ATM and funded accounts, locally generated
+  token keys, and scripts for idempotency, rejection, FPS reconciliation
+  and four-eyes withdrawals.
+- Architecture documentation and ADR-0012 on scaling.
+
 ## [0.12.0] - 2026-09-19
 
 ### Added
