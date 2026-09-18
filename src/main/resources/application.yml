@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: core-banking-service
+
+server:
+  port: ${SERVER_PORT:8080}
+  # Never leak stack traces or exception messages to API clients.
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
