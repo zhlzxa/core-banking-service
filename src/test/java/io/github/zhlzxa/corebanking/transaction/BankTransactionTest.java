@@ -8,9 +8,12 @@ import org.junit.jupiter.api.Test;
 
 class BankTransactionTest {
 
+    private static final Long ALICE = 7L;
+
     private final BankTransaction stored = new BankTransaction(
             7,
             "req-1",
+            ALICE,
             TransactionType.TRANSFER,
             TransactionStatus.COMPLETED,
             1,
@@ -21,23 +24,32 @@ class BankTransactionTest {
 
     @Test
     void sameInstructionIgnoresAmountScale() {
-        assertThat(stored.isSameInstructionAs(instruction(1, 2, "100.00", "HKD")))
+        assertThat(stored.isSameInstructionAs(instruction(ALICE, 1, 2, "100.00", "HKD")))
                 .isTrue();
     }
 
     @Test
     void differentAccountsAmountOrCurrencyIsADifferentInstruction() {
-        assertThat(stored.isSameInstructionAs(instruction(2, 1, "100.00", "HKD")))
+        assertThat(stored.isSameInstructionAs(instruction(ALICE, 2, 1, "100.00", "HKD")))
                 .isFalse();
-        assertThat(stored.isSameInstructionAs(instruction(1, 3, "100.00", "HKD")))
+        assertThat(stored.isSameInstructionAs(instruction(ALICE, 1, 3, "100.00", "HKD")))
                 .isFalse();
-        assertThat(stored.isSameInstructionAs(instruction(1, 2, "100.01", "HKD")))
+        assertThat(stored.isSameInstructionAs(instruction(ALICE, 1, 2, "100.01", "HKD")))
                 .isFalse();
-        assertThat(stored.isSameInstructionAs(instruction(1, 2, "100.00", "USD")))
+        assertThat(stored.isSameInstructionAs(instruction(ALICE, 1, 2, "100.00", "USD")))
                 .isFalse();
     }
 
-    private static NewTransaction instruction(long from, long to, String amount, String currency) {
-        return new NewTransaction("req-1", TransactionType.TRANSFER, from, to, new BigDecimal(amount), currency);
+    @Test
+    void sameRequestFromAnotherUserIsNeverARetry() {
+        assertThat(stored.isSameInstructionAs(instruction(8L, 1, 2, "100.00", "HKD")))
+                .isFalse();
+        assertThat(stored.isSameInstructionAs(instruction(null, 1, 2, "100.00", "HKD")))
+                .isFalse();
+    }
+
+    private static NewTransaction instruction(Long initiator, long from, long to, String amount, String currency) {
+        return new NewTransaction(
+                "req-1", initiator, TransactionType.TRANSFER, from, to, new BigDecimal(amount), currency);
     }
 }

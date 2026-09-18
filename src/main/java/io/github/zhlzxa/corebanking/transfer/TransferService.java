@@ -12,6 +12,7 @@ import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Concurrency is controlled with pessimistic row locks. Both accounts are locked in ascending
  * id order regardless of transfer direction, so two opposite transfers between the same accounts
  * queue behind each other instead of deadlocking.
+ *
+ * <p>Authorization has three layers: the client application must hold the {@code bank.transfer}
+ * scope, the caller must have the bank role {@code CUSTOMER}, and the source account must belong
+ * to the caller. An account that exists but belongs to someone else is reported exactly like a
+ * missing one, so that account identifiers cannot be probed.
  *
  * <p>Business rules are evaluated only for a newly claimed request. A retry of an already
  * processed request returns the original outcome even if an account has changed since.
@@ -55,11 +61,13 @@ public class TransferService {
      * @return the completed transaction
      * @throws InvalidTransferException if the instruction is structurally invalid
      * @throws IdempotencyConflictException if the request id was used for another instruction
-     * @throws AccountNotFoundException if either account does not exist
+     * @throws AccountNotFoundException if either account does not exist, the source account is not
+     *     owned by the customer, or the destination is not a customer account
      * @throws CurrencyMismatchException if the currency differs from either account
      * @throws InsufficientBalanceException if the source balance does not cover the amount
      */
     @Transactional
+    @PreAuthorize("hasAuthority('SCOPE_bank.transfer') and hasRole('CUSTOMER')")
     public BankTransaction transfer(TransferCommand command) {
         validate(command);
 
@@ -67,6 +75,10 @@ public class TransferService {
         // accounts, so their existence must be established first, and holding the locks early
         // costs nothing because a retry has to wait for the original request anyway.
         LockedAccounts accounts = lockInIdOrder(command.fromAccountId(), command.toAccountId());
+        if (!accounts.source().isOwnedBy(command.customerId())
+                || !accounts.destination().isCustomerAccount()) {
+            throw new AccountNotFoundException();
+        }
 
         NewTransaction instruction = command.toNewTransaction();
         Optional<Long> claimed = transactionRepository.insertPendingIfAbsent(instruction);

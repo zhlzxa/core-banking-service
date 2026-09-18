@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "Request validation failed"),
     MALFORMED_REQUEST(HttpStatus.BAD_REQUEST, "Malformed request"),
+    UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Authentication required"),
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "Access denied"),
     INVALID_TRANSFER(HttpStatus.BAD_REQUEST, "Invalid transfer"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Account not found"),
     INSUFFICIENT_BALANCE(HttpStatus.CONFLICT, "Insufficient balance"),

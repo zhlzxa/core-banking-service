@@ -20,8 +20,9 @@ Prerequisites: JDK 21 and Docker.
 # Build and run all unit and integration tests (starts PostgreSQL in a container)
 ./mvnw verify
 
-# Run the service locally against the compose database
+# Run the service locally against the compose database and an OIDC provider
 docker compose up -d postgres
+export OIDC_ISSUER_URI=https://idp.example.com/realms/bank OIDC_AUDIENCE=core-banking-api
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
@@ -38,6 +39,10 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 - **Concurrency safety.** Accounts are locked in ascending id order, so
   concurrent transfers never overdraw an account and never deadlock. See
   [ADR-0001](docs/adr/0001-lock-accounts-in-ascending-id-order.md).
+- **Layered authorization.** Callers authenticate with OAuth2 bearer tokens
+  from an external OpenID Connect provider. Every transfer checks the token
+  scope, the caller's bank role and ownership of the source account. See
+  [ADR-0003](docs/adr/0003-delegate-authentication-to-an-oidc-provider.md).
 - **Safe error contract.** Errors are RFC 9457 problem responses with a
   stable `code`; internal details never leak to clients.
 
@@ -48,8 +53,12 @@ instance, including concurrent scenarios and injected failures.
 
 ### `POST /transfers`
 
+Requires a bearer token with scope `bank.transfer` for a user with role
+`CUSTOMER` who owns the source account.
+
 ```http
 POST /transfers
+Authorization: Bearer <access token>
 Content-Type: application/json
 
 {
@@ -85,7 +94,9 @@ binary floating point.
 | 400 | `VALIDATION_FAILED` | A field is missing or invalid; `errors` lists the fields |
 | 400 | `MALFORMED_REQUEST` | The body is not valid JSON |
 | 400 | `INVALID_TRANSFER` | Source and destination are the same account |
-| 404 | `ACCOUNT_NOT_FOUND` | An account does not exist |
+| 401 | — | Missing, invalid or expired token; unknown or inactive user |
+| 403 | `ACCESS_DENIED` | Missing scope or role |
+| 404 | `ACCOUNT_NOT_FOUND` | An account does not exist or is not the caller's |
 | 409 | `INSUFFICIENT_BALANCE` | The source balance does not cover the amount |
 | 409 | `CURRENCY_MISMATCH` | The currency differs from an account currency |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | The `requestId` was used for a different instruction |

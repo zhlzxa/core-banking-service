@@ -18,7 +18,7 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public Optional<Account> findById(long accountId) {
-        return jdbc.sql("SELECT id, currency, balance FROM accounts WHERE id = :id")
+        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id")
                 .param("id", accountId)
                 .query(JdbcAccountRepository::mapAccount)
                 .optional();
@@ -26,7 +26,7 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public Optional<Account> findByIdForUpdate(long accountId) {
-        return jdbc.sql("SELECT id, currency, balance FROM accounts WHERE id = :id FOR UPDATE")
+        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id FOR UPDATE")
                 .param("id", accountId)
                 .query(JdbcAccountRepository::mapAccount)
                 .optional();
@@ -61,6 +61,10 @@ class JdbcAccountRepository implements AccountRepository {
     }
 
     private static Account mapAccount(ResultSet rs, int rowNum) throws SQLException {
-        return new Account(rs.getLong("id"), rs.getString("currency"), rs.getBigDecimal("balance"));
+        return new Account(
+                rs.getLong("id"),
+                rs.getObject("user_id", Long.class),
+                rs.getString("currency"),
+                rs.getBigDecimal("balance"));
     }
 }

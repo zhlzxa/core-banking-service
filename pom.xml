@@ -13,7 +13,7 @@
 
     <groupId>io.github.zhlzxa</groupId>
     <artifactId>core-banking-service</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>core-banking-service</name>
     <description>Core banking backend: accounts, double-entry ledger, transfers and payments</description>
 
@@ -51,6 +51,10 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
         <dependency>
@@ -75,6 +79,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
