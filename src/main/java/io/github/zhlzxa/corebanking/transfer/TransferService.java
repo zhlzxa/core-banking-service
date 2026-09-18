@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Concurrency is controlled with pessimistic row locks. Both accounts are locked in ascending
  * id order regardless of transfer direction, so two opposite transfers between the same accounts
  * queue behind each other instead of deadlocking.
+ *
+ * <p>Business rules are evaluated only for a newly claimed request. A retry of an already
+ * processed request returns the original outcome even if an account has changed since.
  */
 @Service
 public class TransferService {
@@ -60,6 +63,11 @@ public class TransferService {
     public BankTransaction transfer(TransferCommand command) {
         validate(command);
 
+        // Locks are taken before the request id is claimed: the transaction row references both
+        // accounts, so their existence must be established first, and holding the locks early
+        // costs nothing because a retry has to wait for the original request anyway.
+        LockedAccounts accounts = lockInIdOrder(command.fromAccountId(), command.toAccountId());
+
         NewTransaction instruction = command.toNewTransaction();
         Optional<Long> claimed = transactionRepository.insertPendingIfAbsent(instruction);
         if (claimed.isEmpty()) {
@@ -67,7 +75,6 @@ public class TransferService {
         }
         long transactionId = claimed.get();
 
-        LockedAccounts accounts = lockInIdOrder(command.fromAccountId(), command.toAccountId());
         Account source = accounts.source();
         Account destination = accounts.destination();
 

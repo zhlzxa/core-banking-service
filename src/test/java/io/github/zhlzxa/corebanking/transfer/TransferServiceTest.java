@@ -125,17 +125,20 @@ class TransferServiceTest {
     }
 
     @Test
-    void unknownAccountIsReportedAsNotFound() {
-        givenClaimedRequest();
+    void unknownAccountIsReportedBeforeTheRequestIdIsClaimed() {
         givenAccount(1, "HKD", "1000.00");
         when(accountRepository.findByIdForUpdate(2)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> transferService.transfer(command(1, 2, "100.00")))
                 .isInstanceOf(AccountNotFoundException.class);
+
+        verifyNoInteractions(transactionRepository, ledgerRepository);
     }
 
     @Test
     void retryWithSameInstructionReturnsOriginalTransactionWithoutMovingMoney() {
+        givenAccount(1, "HKD", "0.00");
+        givenAccount(2, "HKD", "0.00");
         when(transactionRepository.insertPendingIfAbsent(any())).thenReturn(Optional.empty());
         BankTransaction original = stored(TransactionStatus.COMPLETED);
         when(transactionRepository.findByRequestId("req-1")).thenReturn(Optional.of(original));
@@ -143,11 +146,15 @@ class TransferServiceTest {
         BankTransaction result = transferService.transfer(command(1, 2, "100.0"));
 
         assertThat(result).isEqualTo(original);
-        verifyNoInteractions(accountRepository, ledgerRepository);
+        verify(accountRepository, never()).debit(anyLong(), any());
+        verify(accountRepository, never()).credit(anyLong(), any());
+        verifyNoInteractions(ledgerRepository);
     }
 
     @Test
     void reusingRequestIdForDifferentInstructionIsAConflict() {
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00");
         when(transactionRepository.insertPendingIfAbsent(any())).thenReturn(Optional.empty());
         when(transactionRepository.findByRequestId("req-1"))
                 .thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
@@ -155,7 +162,8 @@ class TransferServiceTest {
         assertThatThrownBy(() -> transferService.transfer(command(1, 2, "250.00")))
                 .isInstanceOf(IdempotencyConflictException.class);
 
-        verifyNoInteractions(accountRepository, ledgerRepository);
+        verify(accountRepository, never()).debit(anyLong(), any());
+        verifyNoInteractions(ledgerRepository);
     }
 
     private void givenClaimedRequest() {
