@@ -15,6 +15,7 @@ import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
 import io.github.zhlzxa.corebanking.account.AccountStatus;
+import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditAction;
 import io.github.zhlzxa.corebanking.audit.AuditActor;
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
@@ -25,6 +26,7 @@ import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.audit.AuditOutcome;
 import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
+import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
@@ -34,6 +36,8 @@ import io.github.zhlzxa.corebanking.transaction.TransactionType;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -67,6 +71,13 @@ class TransferServiceTest {
 
     @Mock
     private IndependentAuditRecorder independentAuditRecorder;
+
+    @Mock
+    private DailyTransferUsageRepository dailyTransferUsageRepository;
+
+    @Spy
+    private BusinessCalendar businessCalendar = new BusinessCalendar(
+            Clock.fixed(Instant.parse("2026-09-18T17:30:00Z"), ZoneOffset.UTC), ZoneId.of("Asia/Hong_Kong"));
 
     @Spy
     private AuditEventFactory auditEventFactory =
@@ -220,6 +231,43 @@ class TransferServiceTest {
     }
 
     @Test
+    void dailyLimitIsConsumedForTheHongKongBusinessDay() {
+        givenClaimedRequest();
+        givenAccountWithDailyLimit(1, "500.00");
+        givenAccount(2, "HKD", "0.00");
+        when(dailyTransferUsageRepository.tryConsume(1, LocalDate.of(2026, 9, 19), AMOUNT, new BigDecimal("500.00")))
+                .thenReturn(true);
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
+
+        transferService.transfer(AUDIT, command(1, 2, "100.00"));
+
+        verify(accountRepository).debit(1, AMOUNT);
+    }
+
+    @Test
+    void exhaustedDailyLimitStopsTheTransfer() {
+        givenClaimedRequest();
+        givenAccountWithDailyLimit(1, "500.00");
+        givenAccount(2, "HKD", "0.00");
+        when(dailyTransferUsageRepository.tryConsume(anyLong(), any(), any(), any()))
+                .thenReturn(false);
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.TRANSFER_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void accountsWithoutDailyLimitDoNotTrackUsage() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00");
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
+
+        transferService.transfer(AUDIT, command(1, 2, "100.00"));
+
+        verifyNoInteractions(dailyTransferUsageRepository);
+    }
+
+    @Test
     void amountWithMorePrecisionThanTheCurrencyIsRejectedBeforeAnyLock() {
         TransferCommand tooPrecise = new TransferCommand(ownerOf(1), "req-1", 1, 2, new BigDecimal("10.005"), "HKD");
 
@@ -330,6 +378,19 @@ class TransferServiceTest {
         when(accountRepository.findByIdForUpdate(id))
                 .thenReturn(Optional.of(
                         new Account(id, ownerOf(id), currency, new BigDecimal(balance), status, null, limit, null)));
+    }
+
+    private void givenAccountWithDailyLimit(long id, String dailyLimit) {
+        when(accountRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(new Account(
+                        id,
+                        ownerOf(id),
+                        "HKD",
+                        new BigDecimal("1000.00"),
+                        AccountStatus.ACTIVE,
+                        null,
+                        null,
+                        new BigDecimal(dailyLimit))));
     }
 
     private void assertRuleViolation(TransferCommand command, ErrorCode expected) {

@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.transfer;
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
+import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
@@ -11,6 +12,7 @@ import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
 import io.github.zhlzxa.corebanking.common.error.BusinessException;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.common.money.CurrencyUnits;
+import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.security.Permissions;
@@ -59,6 +61,8 @@ public class TransferService {
     private final AuditEventRepository auditEventRepository;
     private final AuditEventFactory auditEventFactory;
     private final IndependentAuditRecorder independentAuditRecorder;
+    private final DailyTransferUsageRepository dailyTransferUsageRepository;
+    private final BusinessCalendar businessCalendar;
 
     public TransferService(
             AccountRepository accountRepository,
@@ -66,13 +70,17 @@ public class TransferService {
             LedgerRepository ledgerRepository,
             AuditEventRepository auditEventRepository,
             AuditEventFactory auditEventFactory,
-            IndependentAuditRecorder independentAuditRecorder) {
+            IndependentAuditRecorder independentAuditRecorder,
+            DailyTransferUsageRepository dailyTransferUsageRepository,
+            BusinessCalendar businessCalendar) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.ledgerRepository = ledgerRepository;
         this.auditEventRepository = auditEventRepository;
         this.auditEventFactory = auditEventFactory;
         this.independentAuditRecorder = independentAuditRecorder;
+        this.dailyTransferUsageRepository = dailyTransferUsageRepository;
+        this.businessCalendar = businessCalendar;
     }
 
     /**
@@ -139,6 +147,11 @@ public class TransferService {
             throw new InsufficientBalanceException();
         }
         if (source.exceedsPerTransactionLimit(command.amount())) {
+            throw AccountRuleViolationException.limitExceeded();
+        }
+        if (source.dailyTransferLimit() != null
+                && !dailyTransferUsageRepository.tryConsume(
+                        source.id(), businessCalendar.today(), command.amount(), source.dailyTransferLimit())) {
             throw AccountRuleViolationException.limitExceeded();
         }
 
