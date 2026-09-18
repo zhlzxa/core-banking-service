@@ -12,6 +12,7 @@ import io.github.zhlzxa.corebanking.common.money.CurrencyUnits;
 import io.github.zhlzxa.corebanking.posting.AccountLocks;
 import io.github.zhlzxa.corebanking.posting.AccountRuleViolationException;
 import io.github.zhlzxa.corebanking.posting.CurrencyMismatchException;
+import io.github.zhlzxa.corebanking.posting.CurrencyNotSupportedException;
 import io.github.zhlzxa.corebanking.posting.IdempotentTransactions;
 import io.github.zhlzxa.corebanking.posting.IdempotentTransactions.Claim;
 import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
