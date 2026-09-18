@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,6 +14,15 @@ import static org.mockito.Mockito.when;
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
+import io.github.zhlzxa.corebanking.audit.AuditAction;
+import io.github.zhlzxa.corebanking.audit.AuditActor;
+import io.github.zhlzxa.corebanking.audit.AuditChannel;
+import io.github.zhlzxa.corebanking.audit.AuditContext;
+import io.github.zhlzxa.corebanking.audit.AuditEvent;
+import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
+import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
+import io.github.zhlzxa.corebanking.audit.AuditOutcome;
+import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
@@ -20,13 +30,17 @@ import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
 import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
 import io.github.zhlzxa.corebanking.transaction.TransactionType;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,6 +48,8 @@ class TransferServiceTest {
 
     private static final BigDecimal AMOUNT = new BigDecimal("100.00");
     private static final long TX_ID = 42;
+    private static final AuditContext AUDIT =
+            new AuditContext(new AuditActor(1001L, "https://issuer", "alice", "CUSTOMER"), "corr-1", AuditChannel.API);
 
     @Mock
     private AccountRepository accountRepository;
@@ -44,12 +60,22 @@ class TransferServiceTest {
     @Mock
     private LedgerRepository ledgerRepository;
 
+    @Mock
+    private AuditEventRepository auditEventRepository;
+
+    @Mock
+    private IndependentAuditRecorder independentAuditRecorder;
+
+    @Spy
+    private AuditEventFactory auditEventFactory =
+            new AuditEventFactory(Clock.fixed(Instant.parse("2026-09-18T08:00:00Z"), ZoneOffset.UTC));
+
     @InjectMocks
     private TransferService transferService;
 
     @Test
     void rejectsTransferToSameAccountBeforeTouchingStorage() {
-        assertThatThrownBy(() -> transferService.transfer(command(1, 1, "100.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 1, "100.00")))
                 .isInstanceOf(InvalidTransferException.class);
 
         verifyNoInteractions(accountRepository, transactionRepository, ledgerRepository);
@@ -57,7 +83,7 @@ class TransferServiceTest {
 
     @Test
     void rejectsNonPositiveAmount() {
-        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "0.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "0.00")))
                 .isInstanceOf(InvalidTransferException.class);
 
         verifyNoInteractions(accountRepository, transactionRepository, ledgerRepository);
@@ -70,7 +96,7 @@ class TransferServiceTest {
         givenAccount(2, "HKD", "500.00");
         when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
 
-        BankTransaction result = transferService.transfer(command(1, 2, "100.00"));
+        BankTransaction result = transferService.transfer(AUDIT, command(1, 2, "100.00"));
 
         assertThat(result.status()).isEqualTo(TransactionStatus.COMPLETED);
         InOrder order = inOrder(accountRepository, ledgerRepository, transactionRepository);
@@ -79,6 +105,11 @@ class TransferServiceTest {
         order.verify(ledgerRepository).append(LedgerEntry.debit(TX_ID, 1, AMOUNT, "HKD"));
         order.verify(ledgerRepository).append(LedgerEntry.credit(TX_ID, 2, AMOUNT, "HKD"));
         order.verify(transactionRepository).updateStatus(TX_ID, TransactionStatus.COMPLETED);
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).append(audited.capture());
+        assertThat(audited.getValue().action()).isEqualTo(AuditAction.TRANSFER_COMPLETED);
+        assertThat(audited.getValue().transactionId()).isEqualTo(TX_ID);
+        verifyNoInteractions(independentAuditRecorder);
     }
 
     @Test
@@ -88,7 +119,7 @@ class TransferServiceTest {
         givenAccount(2, "HKD", "500.00");
         when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
 
-        transferService.transfer(command(2, 1, "100.00"));
+        transferService.transfer(AUDIT, command(2, 1, "100.00"));
 
         InOrder order = inOrder(accountRepository);
         order.verify(accountRepository).findByIdForUpdate(1);
@@ -103,13 +134,48 @@ class TransferServiceTest {
         givenAccount(1, "HKD", "99.99");
         givenAccount(2, "HKD", "0.00");
 
-        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "100.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
                 .isInstanceOf(InsufficientBalanceException.class);
 
         verify(accountRepository, never()).debit(anyLong(), any());
         verify(accountRepository, never()).credit(anyLong(), any());
         verifyNoInteractions(ledgerRepository);
         verify(transactionRepository, never()).updateStatus(anyLong(), any());
+        verifyNoInteractions(auditEventRepository);
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(independentAuditRecorder).record(audited.capture());
+        assertThat(audited.getValue().outcome()).isEqualTo(AuditOutcome.REJECTED);
+        assertThat(audited.getValue().reasonCode()).isEqualTo("INSUFFICIENT_BALANCE");
+        assertThat(audited.getValue().metadata()).containsEntry("amount", "100.00");
+    }
+
+    @Test
+    void failureToAuditARejectionNeverMasksTheRejection() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "0.00");
+        givenAccount(2, "HKD", "0.00");
+        doThrow(new IllegalStateException("audit store down"))
+                .when(independentAuditRecorder)
+                .record(any());
+
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
+                .isInstanceOf(InsufficientBalanceException.class);
+    }
+
+    @Test
+    void unexpectedFailureIsAuditedAsFailed() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00");
+        doThrow(new IllegalStateException("disk full")).when(ledgerRepository).append(any());
+
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
+                .isInstanceOf(IllegalStateException.class);
+
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(independentAuditRecorder).record(audited.capture());
+        assertThat(audited.getValue().outcome()).isEqualTo(AuditOutcome.FAILED);
+        assertThat(audited.getValue().reasonCode()).isEqualTo("INTERNAL_ERROR");
     }
 
     @Test
@@ -118,7 +184,7 @@ class TransferServiceTest {
         givenAccount(1, "HKD", "1000.00");
         givenAccount(2, "USD", "0.00");
 
-        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "100.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
                 .isInstanceOf(CurrencyMismatchException.class);
 
         verifyNoInteractions(ledgerRepository);
@@ -129,7 +195,7 @@ class TransferServiceTest {
         givenAccount(1, "HKD", "1000.00");
         when(accountRepository.findByIdForUpdate(2)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "100.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
                 .isInstanceOf(AccountNotFoundException.class);
 
         verifyNoInteractions(transactionRepository, ledgerRepository);
@@ -142,7 +208,7 @@ class TransferServiceTest {
         TransferCommand fromSomeoneElsesAccount =
                 new TransferCommand(ownerOf(2), "req-1", 1, 2, new BigDecimal("100.00"), "HKD");
 
-        assertThatThrownBy(() -> transferService.transfer(fromSomeoneElsesAccount))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, fromSomeoneElsesAccount))
                 .isInstanceOf(AccountNotFoundException.class);
 
         verifyNoInteractions(transactionRepository, ledgerRepository);
@@ -154,7 +220,7 @@ class TransferServiceTest {
         when(accountRepository.findByIdForUpdate(2))
                 .thenReturn(Optional.of(new Account(2, null, "HKD", BigDecimal.ZERO)));
 
-        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "100.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
                 .isInstanceOf(AccountNotFoundException.class);
 
         verifyNoInteractions(transactionRepository, ledgerRepository);
@@ -168,12 +234,12 @@ class TransferServiceTest {
         BankTransaction original = stored(TransactionStatus.COMPLETED);
         when(transactionRepository.findByRequestId("req-1")).thenReturn(Optional.of(original));
 
-        BankTransaction result = transferService.transfer(command(1, 2, "100.0"));
+        BankTransaction result = transferService.transfer(AUDIT, command(1, 2, "100.0"));
 
         assertThat(result).isEqualTo(original);
         verify(accountRepository, never()).debit(anyLong(), any());
         verify(accountRepository, never()).credit(anyLong(), any());
-        verifyNoInteractions(ledgerRepository);
+        verifyNoInteractions(ledgerRepository, auditEventRepository, independentAuditRecorder);
     }
 
     @Test
@@ -184,7 +250,7 @@ class TransferServiceTest {
         when(transactionRepository.findByRequestId("req-1"))
                 .thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
 
-        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "250.00")))
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "250.00")))
                 .isInstanceOf(IdempotencyConflictException.class);
 
         verify(accountRepository, never()).debit(anyLong(), any());

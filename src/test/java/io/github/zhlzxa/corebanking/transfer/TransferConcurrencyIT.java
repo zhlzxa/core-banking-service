@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.transfer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestAuditContexts;
 import io.github.zhlzxa.corebanking.support.TestDataFactory;
 import io.github.zhlzxa.corebanking.support.TestSecurityContexts;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
@@ -111,7 +112,8 @@ class TransferConcurrencyIT extends AbstractIntegrationIT {
     private Callable<BankTransaction> transfer(long customer, String requestId, long from, long to, String amount) {
         TransferCommand command = new TransferCommand(customer, requestId, from, to, new BigDecimal(amount), "HKD");
         return new DelegatingSecurityContextCallable<>(
-                () -> transferService.transfer(command), TestSecurityContexts.customer(customer, "bank.transfer"));
+                () -> transferService.transfer(TestAuditContexts.customer(customer), command),
+                TestSecurityContexts.customer(customer, "bank.transfer"));
     }
 
     private List<Outcome> runConcurrently(List<Callable<BankTransaction>> tasks) throws InterruptedException {

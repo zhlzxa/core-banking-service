@@ -1,5 +1,6 @@
 package io.github.zhlzxa.corebanking.security;
 
+import io.github.zhlzxa.corebanking.audit.AuditActor;
 import io.github.zhlzxa.corebanking.user.UserRole;
 import org.springframework.security.core.AuthenticatedPrincipal;
 
@@ -16,5 +17,9 @@ public record BankPrincipal(long userId, String issuer, String subject, UserRole
     @Override
     public String getName() {
         return Long.toString(userId);
+    }
+
+    public AuditActor toAuditActor() {
+        return new AuditActor(userId, issuer, subject, role.name());
     }
 }

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doThrow;
 import io.github.zhlzxa.corebanking.ledger.EntryDirection;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestAuditContexts;
 import io.github.zhlzxa.corebanking.support.TestDataFactory;
 import io.github.zhlzxa.corebanking.support.TestSecurityContexts;
 import java.math.BigDecimal;
@@ -56,6 +57,7 @@ class TransferRollbackIT extends AbstractIntegrationIT {
                 .append(argThat(entry -> entry.direction() == EntryDirection.CREDIT));
 
         assertThatThrownBy(() -> transferService.transfer(
+                        TestAuditContexts.customer(alice),
                         new TransferCommand(alice, "req-rollback", 1, 2, new BigDecimal("100.00"), "HKD")))
                 .isInstanceOf(IllegalStateException.class);
 
