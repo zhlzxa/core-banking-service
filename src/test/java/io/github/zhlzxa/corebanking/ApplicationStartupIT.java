@@ -19,4 +19,19 @@ class ApplicationStartupIT extends AbstractIntegrationIT {
 
         assertThat(serverVersion).startsWith("17.");
     }
+
+    @Test
+    void appliesAllMigrationsSuccessfully() {
+        Integer failed = jdbcClient
+                .sql("SELECT count(*) FROM flyway_schema_history WHERE NOT success")
+                .query(Integer.class)
+                .single();
+        Integer applied = jdbcClient
+                .sql("SELECT count(*) FROM flyway_schema_history WHERE success")
+                .query(Integer.class)
+                .single();
+
+        assertThat(failed).isZero();
+        assertThat(applied).isPositive();
+    }
 }
