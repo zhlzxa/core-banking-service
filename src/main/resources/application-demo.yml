@@ -1,0 +1,29 @@
+# Demonstration profile, for the compose environment on a developer machine
+# only. It loads sample customers and accounts, trusts tokens signed with the
+# local demo key pair from demo/generate-keys.sh, and speeds up FPS
+# reconciliation so that its effect is visible within seconds. Never activate
+# it in a shared environment.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/corebanking}
+    username: ${DB_USERNAME:corebanking}
+    password: ${DB_PASSWORD:local-dev-only}
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+corebanking:
+  security:
+    oidc:
+      issuer: https://demo-idp.corebanking.local
+      audience: core-banking-api
+      public-key-location: ${OIDC_PUBLIC_KEY_LOCATION:file:demo/keys/public.pem}
+  fps:
+    retry-backoff: 5s, 10s, 30s
+    reconciliation:
+      interval: 5s
