@@ -21,5 +21,11 @@ public final class Permissions {
     public static final String CUSTOMER_MANAGE_PAYEES =
             "hasAuthority('SCOPE_bank.payees.write') and hasRole('CUSTOMER')";
 
+    /**
+     * Freeze, unfreeze, close accounts and change their limits. Administrators manage accounts but
+     * cannot move customer money: there is deliberately no transfer permission for this role.
+     */
+    public static final String ADMIN_MANAGE_ACCOUNTS = "hasAuthority('SCOPE_bank.accounts.admin') and hasRole('ADMIN')";
+
     private Permissions() {}
 }
