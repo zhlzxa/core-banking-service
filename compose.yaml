@@ -1,0 +1,23 @@
+# Local development infrastructure. Credentials here are for a throwaway
+# local database only and must never be reused in any shared environment.
+# Ports are bound to 127.0.0.1 so the database is not reachable from the
+# network.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-corebanking}
+      POSTGRES_USER: ${POSTGRES_USER:-corebanking}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
