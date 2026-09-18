@@ -1,0 +1,29 @@
+# Build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and local runtime files
+*.log
+logs/
+
+# Local configuration and secrets - never commit these
+.env
+.env.*
+!.env.example
+application-local.properties
+application-local.yml
+*.pem
+*.key
