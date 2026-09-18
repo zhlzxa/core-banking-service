@@ -39,6 +39,11 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 - **Concurrency safety.** Accounts are locked in ascending id order, so
   concurrent transfers never overdraw an account and never deadlock. See
   [ADR-0001](docs/adr/0001-lock-accounts-in-ascending-id-order.md).
+- **Account controls.** Frozen and dormant accounts can receive but not send;
+  closed accounts do neither. Amounts must fit the currency's minor units.
+  Per-transaction and daily limits hold under concurrency and reset at
+  midnight Hong Kong time. See
+  [ADR-0007](docs/adr/0007-enforce-cumulative-limits-with-an-atomic-conditional-upsert.md).
 - **Layered authorization.** Callers authenticate with OAuth2 bearer tokens
   from an external OpenID Connect provider. Every transfer checks the token
   scope, the caller's bank role and ownership of the source account. See
@@ -73,7 +78,15 @@ instance, including concurrent scenarios and injected failures.
 | `PATCH /payees/{id}` | `bank.payees.write` | Rename a payee; requires the last-read `version` |
 | `DELETE /payees/{id}` | `bank.payees.write` | Remove a payee |
 
-All endpoints require the bank role `CUSTOMER`.
+These endpoints require the bank role `CUSTOMER`. Back-office operations
+require the role `ADMIN` and the scope `bank.accounts.admin`:
+
+| Method and path | Purpose |
+|---|---|
+| `POST /admin/accounts/{id}/freeze` | Block outgoing movements, with a reason |
+| `POST /admin/accounts/{id}/unfreeze` | Lift a freeze |
+| `POST /admin/accounts/{id}/close` | Close an account with zero balance |
+| `PUT /admin/accounts/{id}/limits` | Set per-transaction and daily limits |
 
 ### `POST /transfers`
 

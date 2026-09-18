@@ -29,6 +29,7 @@ problem document with media type `application/problem+json`.
 | 400 | `VALIDATION_FAILED` | One or more fields are missing or invalid | Correct the listed fields |
 | 400 | `MALFORMED_REQUEST` | The body is not valid JSON or has the wrong structure | Fix the request encoding |
 | 400 | `INVALID_TRANSFER` | The instruction is structurally invalid, for example source equals destination | Correct the instruction |
+| 400 | `INVALID_AMOUNT_SCALE` | The amount has more decimal places than the currency allows (for example fractional JPY) | Round to the currency's minor unit |
 | 400 | `INVALID_CURSOR` | The pagination cursor is malformed or was altered | Restart from the first page |
 | 401 | `UNAUTHENTICATED` | Token missing, invalid, expired, for another audience, or the user is unknown or inactive | Obtain a new token; do not retry blindly |
 | 403 | `ACCESS_DENIED` | The token lacks the required scope or the user lacks the required role | Request the proper scope or role |
@@ -36,6 +37,10 @@ problem document with media type `application/problem+json`.
 | 404 | `TRANSFER_NOT_FOUND` | The transfer does not exist or does not involve the caller's accounts | Check the transfer identifier |
 | 404 | `PAYEE_NOT_FOUND` | The payee does not exist or belongs to another customer | Reload the payee list |
 | 409 | `INSUFFICIENT_BALANCE` | The source balance does not cover the amount | Retry with the same `requestId` once funded |
+| 409 | `SOURCE_ACCOUNT_NOT_ACTIVE` | The source account is frozen, dormant or closed | Contact the bank |
+| 409 | `DESTINATION_ACCOUNT_CLOSED` | The destination account is closed | Use another destination |
+| 409 | `TRANSFER_LIMIT_EXCEEDED` | The amount exceeds the per-transaction limit or the remaining daily limit | Transfer less, or wait for the next business day |
+| 409 | `INVALID_ACCOUNT_STATE` | A back-office operation is not allowed in the account's current status | Check the account status |
 | 409 | `CURRENCY_MISMATCH` | The instruction currency differs from an account currency | Correct the currency |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | The `requestId` was already used for a different instruction | Use a new `requestId` |
 | 409 | `PAYEE_ALREADY_EXISTS` | The destination is already saved as a payee | Use the existing payee |

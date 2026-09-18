@@ -13,6 +13,7 @@ that changes is superseded by a new record.
 | [0004](0004-audit-success-in-transaction-and-failure-independently.md) | Audit successes inside the business transaction and failures independently | Accepted |
 | [0005](0005-keyset-pagination-for-transaction-history.md) | Paginate transaction history with a keyset cursor instead of OFFSET | Accepted |
 | [0006](0006-explicit-sql-for-the-ledger-jpa-for-reference-data.md) | Use explicit SQL for the ledger and JPA only for reference data | Accepted |
+| [0007](0007-enforce-cumulative-limits-with-an-atomic-conditional-upsert.md) | Enforce cumulative limits with an atomic conditional upsert | Accepted |
 
 ## Template
 
