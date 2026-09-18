@@ -10,5 +10,7 @@ public enum AuditChannel {
     /** A teller at a branch. */
     BRANCH,
     /** An automated teller machine. */
-    ATM
+    ATM,
+    /** An automated job of the bank itself, such as payment reconciliation. */
+    SYSTEM
 }

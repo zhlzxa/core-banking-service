@@ -22,6 +22,7 @@ public record AuditActor(
         @Nullable String branchCode) {
 
     private static final AuditActor ANONYMOUS = new AuditActor(null, null, null, null);
+    private static final AuditActor SYSTEM = new AuditActor(null, null, "core-banking-service", "SYSTEM");
 
     /** An actor without terminal or branch, such as a customer using the public API. */
     public AuditActor(@Nullable Long userId, @Nullable String issuer, @Nullable String subject, @Nullable String role) {
@@ -30,5 +31,10 @@ public record AuditActor(
 
     public static AuditActor anonymous() {
         return ANONYMOUS;
+    }
+
+    /** The service itself, acting in an automated job rather than on a request. */
+    public static AuditActor system() {
+        return SYSTEM;
     }
 }
