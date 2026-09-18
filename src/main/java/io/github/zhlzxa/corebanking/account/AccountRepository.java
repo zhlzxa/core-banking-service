@@ -1,12 +1,22 @@
 package io.github.zhlzxa.corebanking.account;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 /** Persistence operations on accounts. All mutating methods require an active transaction. */
 public interface AccountRepository {
 
     Optional<Account> findById(long accountId);
+
+    /** Accounts owned by a customer, ordered by id. */
+    List<Account> findByOwner(long userId);
+
+    /**
+     * Loads an account only if it belongs to the given customer. Reads that are scoped to a caller
+     * use this method, so that another customer's account is indistinguishable from a missing one.
+     */
+    Optional<Account> findOwned(long accountId, long userId);
 
     /**
      * Loads an account and takes a row-level write lock ({@code SELECT ... FOR UPDATE}) that is held

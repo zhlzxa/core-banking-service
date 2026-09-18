@@ -3,7 +3,10 @@ package io.github.zhlzxa.corebanking.transaction;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -60,6 +63,36 @@ class JdbcTransactionRepository implements TransactionRepository {
                 .param("requestId", requestId)
                 .query(JdbcTransactionRepository::mapTransaction)
                 .optional();
+    }
+
+    /**
+     * The two branches read the outgoing and the incoming side separately, each from its own index
+     * in (created_at DESC, id DESC) order, and each stops after {@code limit} rows. An {@code OR}
+     * across both columns could not use either index for ordering and would sort the account's
+     * entire history on every page. {@code UNION ALL} cannot produce duplicates because a
+     * transaction never has the same account on both sides.
+     *
+     * <p>The row-value comparison {@code (created_at, id) < (:ts, :id)} continues exactly after the
+     * last row of the previous page, independent of rows inserted in the meantime, unlike OFFSET.
+     */
+    @Override
+    public List<BankTransaction> findHistory(long accountId, @Nullable HistoryCursor after, int limit) {
+        String position = after == null ? "" : " AND (created_at, id) < (:createdAt, :id)";
+        String sql = "SELECT * FROM ("
+                + "(" + SELECT_COLUMNS + " WHERE from_account_id = :accountId" + position
+                + " ORDER BY created_at DESC, id DESC LIMIT :limit)"
+                + " UNION ALL "
+                + "(" + SELECT_COLUMNS + " WHERE to_account_id = :accountId" + position
+                + " ORDER BY created_at DESC, id DESC LIMIT :limit)"
+                + ") history ORDER BY created_at DESC, id DESC LIMIT :limit";
+        JdbcClient.StatementSpec statement =
+                jdbc.sql(sql).param("accountId", accountId).param("limit", limit);
+        if (after != null) {
+            statement = statement
+                    .param("createdAt", after.createdAt().atOffset(ZoneOffset.UTC))
+                    .param("id", after.transactionId());
+        }
+        return statement.query(JdbcTransactionRepository::mapTransaction).list();
     }
 
     @Override

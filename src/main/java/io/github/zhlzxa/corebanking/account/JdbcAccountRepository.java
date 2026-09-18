@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.account;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -20,6 +21,23 @@ class JdbcAccountRepository implements AccountRepository {
     public Optional<Account> findById(long accountId) {
         return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id")
                 .param("id", accountId)
+                .query(JdbcAccountRepository::mapAccount)
+                .optional();
+    }
+
+    @Override
+    public List<Account> findByOwner(long userId) {
+        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE user_id = :userId ORDER BY id")
+                .param("userId", userId)
+                .query(JdbcAccountRepository::mapAccount)
+                .list();
+    }
+
+    @Override
+    public Optional<Account> findOwned(long accountId, long userId) {
+        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id AND user_id = :userId")
+                .param("id", accountId)
+                .param("userId", userId)
                 .query(JdbcAccountRepository::mapAccount)
                 .optional();
     }
