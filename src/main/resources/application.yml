@@ -25,3 +25,11 @@ management:
     web:
       exposure:
         include: health,info
+
+# The API is an OAuth2 resource server. Tokens are issued by an external
+# OpenID Connect provider; the service never handles passwords.
+corebanking:
+  security:
+    oidc:
+      issuer: ${OIDC_ISSUER_URI}
+      audience: ${OIDC_AUDIENCE}

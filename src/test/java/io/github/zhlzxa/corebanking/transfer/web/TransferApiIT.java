@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
+import io.github.zhlzxa.corebanking.support.TestJwts;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -26,12 +29,18 @@ class TransferApiIT extends AbstractIntegrationIT {
     @Autowired
     private JdbcClient jdbc;
 
+    @Autowired
+    private TestDataFactory data;
+
+    private final String aliceToken = TestJwts.token("alice-sub", "bank.transfer");
+
     @BeforeEach
     void seedAccounts() {
-        jdbc.sql("""
-                        INSERT INTO accounts (id, currency, balance)
-                        VALUES (100, 'HKD', 1000.00), (200, 'HKD', 500.00), (300, 'USD', 50.00)
-                        """).update();
+        long alice = data.createCustomer("alice-sub");
+        long bob = data.createCustomer("bob-sub");
+        data.createAccount(ALICE, alice, "HKD", "1000.00");
+        data.createAccount(BOB, bob, "HKD", "500.00");
+        data.createAccount(CAROL_USD, alice, "USD", "50.00");
     }
 
     @Test
@@ -123,6 +132,7 @@ class TransferApiIT extends AbstractIntegrationIT {
     void invalidFieldsAreReportedWithoutEchoingInput() throws Exception {
         MvcTestResult result = mvc.post()
                 .uri("/transfers")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"requestId": "has spaces <script>", "fromAccountId": 100, "toAccountId": 200,
@@ -144,6 +154,7 @@ class TransferApiIT extends AbstractIntegrationIT {
     void malformedJsonIsABadRequest() {
         MvcTestResult result = mvc.post()
                 .uri("/transfers")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"requestId\": ")
                 .exchange();
@@ -153,7 +164,10 @@ class TransferApiIT extends AbstractIntegrationIT {
 
     @Test
     void unsupportedMethodStillReturnsAProblemWithCode() {
-        MvcTestResult result = mvc.put().uri("/transfers").exchange();
+        MvcTestResult result = mvc.put()
+                .uri("/transfers")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken)
+                .exchange();
 
         assertProblem(result, HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED");
     }
@@ -161,6 +175,7 @@ class TransferApiIT extends AbstractIntegrationIT {
     private MvcTestResult postTransfer(String requestId, long from, long to, String amount, String currency) {
         return mvc.post()
                 .uri("/transfers")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aliceToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"requestId": "%s", "fromAccountId": %d, "toAccountId": %d,

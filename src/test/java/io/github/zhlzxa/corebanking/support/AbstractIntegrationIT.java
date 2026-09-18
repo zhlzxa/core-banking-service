@@ -6,6 +6,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -13,8 +15,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>A single container is started once per JVM and shared by every test class, so the Spring
  * context can be cached across classes; every subclass therefore shares the same configuration,
- * including MockMvc. The schema is created by Flyway exactly as in production;
- * tests never rely on a hand-written schema. Every test starts from empty tables.
+ * including MockMvc. The schema is created by Flyway exactly as in production; tests never rely on
+ * a hand-written schema. Every test starts from empty tables.
+ *
+ * <p>Bearer tokens are validated against the public key of {@link TestJwts}, with the same issuer,
+ * audience and expiry checks that apply to a real identity provider.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,6 +35,13 @@ public abstract class AbstractIntegrationIT {
 
     @Autowired
     protected DatabaseCleaner databaseCleaner;
+
+    @DynamicPropertySource
+    static void identityProvider(DynamicPropertyRegistry registry) {
+        registry.add("corebanking.security.oidc.issuer", () -> TestJwts.ISSUER);
+        registry.add("corebanking.security.oidc.audience", () -> TestJwts.AUDIENCE);
+        registry.add("corebanking.security.oidc.public-key-location", TestJwts::publicKeyLocation);
+    }
 
     @BeforeEach
     void resetDatabase() {
