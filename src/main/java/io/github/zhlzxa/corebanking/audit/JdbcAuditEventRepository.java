@@ -10,10 +10,12 @@ class JdbcAuditEventRepository implements AuditEventRepository {
 
     private final JdbcClient jdbc;
     private final JsonMapper jsonMapper;
+    private final AuditMetrics metrics;
 
-    JdbcAuditEventRepository(JdbcClient jdbc, JsonMapper jsonMapper) {
+    JdbcAuditEventRepository(JdbcClient jdbc, JsonMapper jsonMapper, AuditMetrics metrics) {
         this.jdbc = jdbc;
         this.jsonMapper = jsonMapper;
+        this.metrics = metrics;
     }
 
     @Override
@@ -48,5 +50,6 @@ class JdbcAuditEventRepository implements AuditEventRepository {
                 .param("reasonCode", event.reasonCode())
                 .param("metadata", jsonMapper.writeValueAsString(event.metadata()))
                 .update();
+        metrics.count(event);
     }
 }

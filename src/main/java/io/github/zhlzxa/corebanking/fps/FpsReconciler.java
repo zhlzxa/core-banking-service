@@ -7,6 +7,7 @@ import io.github.zhlzxa.corebanking.web.CorrelationId;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,7 @@ public class FpsReconciler {
     private final FpsOutcomeService outcomeService;
     private final FpsDispatcher dispatcher;
     private final FpsProperties properties;
+    private final FpsMetrics metrics;
     private final Clock clock;
 
     FpsReconciler(
@@ -45,12 +47,14 @@ public class FpsReconciler {
             FpsOutcomeService outcomeService,
             FpsDispatcher dispatcher,
             FpsProperties properties,
+            FpsMetrics metrics,
             Clock clock) {
         this.paymentRepository = paymentRepository;
         this.fpsClient = fpsClient;
         this.outcomeService = outcomeService;
         this.dispatcher = dispatcher;
         this.properties = properties;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
@@ -91,7 +95,10 @@ public class FpsReconciler {
         }
         FpsClient.Status status;
         try {
-            status = fpsClient.query(payment.endToEndId());
+            status = metrics.time(
+                    "query",
+                    () -> fpsClient.query(payment.endToEndId()),
+                    answer -> answer.name().toLowerCase(Locale.ROOT));
         } catch (FpsCommunicationException ex) {
             outcomeService.recordUnknown(audit, paymentId, "FPS_UNREACHABLE");
             return;

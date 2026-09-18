@@ -123,6 +123,33 @@ class FpsPaymentRepository {
                 .list();
     }
 
+    /**
+     * How many FPS payments are in {@code status}, and when the oldest of them was created. Only the
+     * two unresolved states are supported. The status is written into each statement as a literal so
+     * that PostgreSQL can match it to the partial index of that state; with a bind parameter, a
+     * generic plan could not use the index.
+     */
+    Backlog backlog(TransactionStatus status) {
+        String sql =
+                switch (status) {
+                    case PROCESSING -> """
+                            SELECT count(*) AS payments, min(created_at) AS oldest
+                            FROM transactions WHERE status = 'PROCESSING'
+                            """;
+                    case NEEDS_INVESTIGATION -> """
+                            SELECT count(*) AS payments, min(created_at) AS oldest
+                            FROM transactions WHERE status = 'NEEDS_INVESTIGATION'
+                            """;
+                    default -> throw new IllegalArgumentException("Not an unresolved status: " + status);
+                };
+        return jdbc.sql(sql)
+                .query((rs, rowNum) -> {
+                    OffsetDateTime oldest = rs.getObject("oldest", OffsetDateTime.class);
+                    return new Backlog(rs.getLong("payments"), oldest == null ? null : oldest.toInstant());
+                })
+                .single();
+    }
+
     void linkReversal(long reversalId, long originalId) {
         int updated = jdbc.sql("UPDATE transactions SET original_transaction_id = :original WHERE id = :id")
                 .param("id", reversalId)
@@ -151,4 +178,7 @@ class FpsPaymentRepository {
                 rs.getString("last_error_code"),
                 rs.getObject("created_at", OffsetDateTime.class).toInstant());
     }
+
+    /** Payments in one state; {@code oldestCreatedAt} is null when there are none. */
+    record Backlog(long count, @Nullable Instant oldestCreatedAt) {}
 }
