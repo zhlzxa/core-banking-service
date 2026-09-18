@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /** Verifies that the JPA mapping matches the Flyway schema and that the constraints hold. */
 class PayeeRepositoryIT extends AbstractIntegrationIT {
@@ -56,6 +57,22 @@ class PayeeRepositoryIT extends AbstractIntegrationIT {
         assertThat(payeeRepository.existsDestination(alice, "555", "004")).isFalse();
         assertThatThrownBy(() -> payeeRepository.saveAndFlush(new Payee(alice, "Mother", "555", null, "HKD")))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void concurrentUpdateOfTheSameVersionIsDetected() {
+        long id = payeeRepository
+                .saveAndFlush(new Payee(alice, "Landlord", "123", null, "HKD"))
+                .getId();
+        Payee firstReader = payeeRepository.findById(id).orElseThrow();
+        Payee secondReader = payeeRepository.findById(id).orElseThrow();
+
+        secondReader.rename("Landlord (new)");
+        payeeRepository.saveAndFlush(secondReader);
+        firstReader.rename("Old landlord");
+
+        assertThatThrownBy(() -> payeeRepository.saveAndFlush(firstReader))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
     }
 
     @Test

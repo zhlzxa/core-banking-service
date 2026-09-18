@@ -14,5 +14,12 @@ public final class Permissions {
     public static final String CUSTOMER_READ_ACCOUNTS =
             "hasAuthority('SCOPE_bank.accounts.read') and hasRole('CUSTOMER')";
 
+    /** View one's own saved payees. */
+    public static final String CUSTOMER_READ_PAYEES = "hasAuthority('SCOPE_bank.payees.read') and hasRole('CUSTOMER')";
+
+    /** Add, rename and remove one's own saved payees. */
+    public static final String CUSTOMER_MANAGE_PAYEES =
+            "hasAuthority('SCOPE_bank.payees.write') and hasRole('CUSTOMER')";
+
     private Permissions() {}
 }

@@ -18,9 +18,12 @@ public enum ErrorCode {
     INVALID_CURSOR(HttpStatus.BAD_REQUEST, "Invalid cursor"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Account not found"),
     TRANSFER_NOT_FOUND(HttpStatus.NOT_FOUND, "Transfer not found"),
+    PAYEE_NOT_FOUND(HttpStatus.NOT_FOUND, "Payee not found"),
     INSUFFICIENT_BALANCE(HttpStatus.CONFLICT, "Insufficient balance"),
     CURRENCY_MISMATCH(HttpStatus.CONFLICT, "Currency mismatch"),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Idempotency key reused"),
+    PAYEE_ALREADY_EXISTS(HttpStatus.CONFLICT, "Payee already exists"),
+    CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "Concurrent modification"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 
     private final HttpStatus httpStatus;
