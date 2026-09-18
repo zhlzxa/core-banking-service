@@ -51,6 +51,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: gitleaks/gitleaks-action@v3
+      # The released binary is used directly rather than the marketplace
+      # action: the action derives a commit range from the push event,
+      # which breaks on the root commit and on force pushes. Scanning the
+      # whole history is cheap for a repository of this size.
+      - name: Scan full history with gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks git . --redact --verbose --exit-code 1
