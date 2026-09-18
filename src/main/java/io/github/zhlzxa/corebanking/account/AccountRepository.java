@@ -29,6 +29,13 @@ public interface AccountRepository {
     Optional<Account> findByIdForUpdate(long accountId);
 
     /**
+     * Finds the id of a bank-internal account by its stable code, for example {@code CASH-HKD}.
+     *
+     * @throws AccountNotFoundException if no internal account has this code
+     */
+    long findInternalAccountId(String code);
+
+    /**
      * Decreases the balance.
      *
      * @throws org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException if the

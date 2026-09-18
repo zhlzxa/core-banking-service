@@ -51,6 +51,15 @@ class JdbcAccountRepository implements AccountRepository {
     }
 
     @Override
+    public long findInternalAccountId(String code) {
+        return jdbc.sql("SELECT id FROM accounts WHERE account_type = 'INTERNAL' AND code = :code")
+                .param("code", code)
+                .query(Long.class)
+                .optional()
+                .orElseThrow(AccountNotFoundException::new);
+    }
+
+    @Override
     public Optional<Account> findByIdForUpdate(long accountId) {
         return jdbc.sql(COLUMNS + " WHERE id = :id FOR UPDATE")
                 .param("id", accountId)
@@ -61,12 +70,13 @@ class JdbcAccountRepository implements AccountRepository {
     @Override
     public void debit(long accountId, BigDecimal amount) {
         // The balance predicate duplicates the service-level check on purpose: if a caller ever
-        // debits without holding the row lock, the update fails instead of overdrawing.
+        // debits a customer account without holding the row lock, the update fails instead of
+        // overdrawing. Internal accounts carry the bank's side and may go negative.
         int updated =
                 jdbc.sql("""
                         UPDATE accounts
                         SET balance = balance - :amount, updated_at = now()
-                        WHERE id = :id AND balance >= :amount
+                        WHERE id = :id AND (balance >= :amount OR account_type = 'INTERNAL')
                         """).param("id", accountId).param("amount", amount).update();
         if (updated != 1) {
             throw new JdbcUpdateAffectedIncorrectNumberOfRowsException("debit account " + accountId, 1, updated);

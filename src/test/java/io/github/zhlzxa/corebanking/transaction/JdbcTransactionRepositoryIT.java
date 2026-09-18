@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 class JdbcTransactionRepositoryIT extends AbstractIntegrationIT {
 
@@ -20,12 +20,12 @@ class JdbcTransactionRepositoryIT extends AbstractIntegrationIT {
     private TransactionRepository transactionRepository;
 
     @Autowired
-    private JdbcClient jdbc;
+    private TestDataFactory data;
 
     @BeforeEach
     void seedAccounts() {
-        jdbc.sql("INSERT INTO accounts (id, currency, balance) VALUES (1, 'HKD', 0), (2, 'HKD', 0)")
-                .update();
+        data.createCustomerAccount(1, "HKD", "0");
+        data.createCustomerAccount(2, "HKD", "0");
     }
 
     @Test
