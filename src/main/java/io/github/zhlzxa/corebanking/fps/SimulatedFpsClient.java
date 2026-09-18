@@ -1,6 +1,7 @@
 package io.github.zhlzxa.corebanking.fps;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -15,8 +16,8 @@ import org.springframework.stereotype.Component;
  *   <li>{@code REJECT...}: FPS rejects the payment;
  *   <li>{@code TIMEOUT...}: FPS accepts the payment but the response is lost, so the sender sees a
  *       timeout although the money was paid;
- *   <li>{@code LOST...}: the request never reaches FPS; the sender sees a timeout and FPS knows
- *       nothing about the payment;
+ *   <li>{@code LOST...}: the first request never reaches FPS; the sender sees a timeout and FPS
+ *       knows nothing about the payment until it is sent again;
  *   <li>anything else: FPS accepts the payment.
  * </ul>
  *
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Component;
 public class SimulatedFpsClient implements FpsClient {
 
     private final Map<String, Status> payments = new ConcurrentHashMap<>();
+    private final Set<String> lostOnce = ConcurrentHashMap.newKeySet();
 
     @Override
     public Decision send(FpsInstruction instruction) {
@@ -36,7 +38,7 @@ public class SimulatedFpsClient implements FpsClient {
             return known == Status.ACCEPTED ? Decision.accept() : Decision.reject("DUPLICATE_OF_REJECTED");
         }
         String creditor = instruction.creditorAccount();
-        if (creditor.startsWith("LOST")) {
+        if (creditor.startsWith("LOST") && lostOnce.add(instruction.endToEndId())) {
             throw new FpsCommunicationException("Simulated: request lost before reaching FPS");
         }
         if (creditor.startsWith("REJECT")) {

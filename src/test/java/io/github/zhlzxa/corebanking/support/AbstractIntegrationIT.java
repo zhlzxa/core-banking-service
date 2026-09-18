@@ -41,6 +41,8 @@ public abstract class AbstractIntegrationIT {
         registry.add("corebanking.security.oidc.issuer", () -> TestJwts.ISSUER);
         registry.add("corebanking.security.oidc.audience", () -> TestJwts.AUDIENCE);
         registry.add("corebanking.security.oidc.public-key-location", TestJwts::publicKeyLocation);
+        // Tests trigger reconciliation explicitly instead of racing a background schedule.
+        registry.add("corebanking.fps.reconciliation.enabled", () -> "false");
         // Lets tests assert the number of SQL statements an operation issues (N+1 regressions).
         registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
     }
