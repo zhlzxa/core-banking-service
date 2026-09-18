@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.transfer;
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
+import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
@@ -10,6 +11,8 @@ import io.github.zhlzxa.corebanking.audit.AuditOutcome;
 import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
 import io.github.zhlzxa.corebanking.common.error.BusinessException;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
+import io.github.zhlzxa.corebanking.common.money.CurrencyUnits;
+import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.security.Permissions;
@@ -58,6 +61,8 @@ public class TransferService {
     private final AuditEventRepository auditEventRepository;
     private final AuditEventFactory auditEventFactory;
     private final IndependentAuditRecorder independentAuditRecorder;
+    private final DailyTransferUsageRepository dailyTransferUsageRepository;
+    private final BusinessCalendar businessCalendar;
 
     public TransferService(
             AccountRepository accountRepository,
@@ -65,13 +70,17 @@ public class TransferService {
             LedgerRepository ledgerRepository,
             AuditEventRepository auditEventRepository,
             AuditEventFactory auditEventFactory,
-            IndependentAuditRecorder independentAuditRecorder) {
+            IndependentAuditRecorder independentAuditRecorder,
+            DailyTransferUsageRepository dailyTransferUsageRepository,
+            BusinessCalendar businessCalendar) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.ledgerRepository = ledgerRepository;
         this.auditEventRepository = auditEventRepository;
         this.auditEventFactory = auditEventFactory;
         this.independentAuditRecorder = independentAuditRecorder;
+        this.dailyTransferUsageRepository = dailyTransferUsageRepository;
+        this.businessCalendar = businessCalendar;
     }
 
     /**
@@ -86,6 +95,8 @@ public class TransferService {
      *     owned by the customer, or the destination is not a customer account
      * @throws CurrencyMismatchException if the currency differs from either account
      * @throws InsufficientBalanceException if the source balance does not cover the amount
+     * @throws AccountRuleViolationException if an account's status, the amount's precision or a
+     *     transfer limit does not permit the transfer
      */
     @Transactional
     @PreAuthorize(Permissions.CUSTOMER_TRANSFER)
@@ -117,14 +128,31 @@ public class TransferService {
         }
         long transactionId = claimed.get();
 
+        // Rules are evaluated on the locked rows, so no concurrent change can invalidate them before
+        // commit. The order decides which reason a client sees when several rules fail: account
+        // state first, then currency, then funds, then limits.
         Account source = accounts.source();
         Account destination = accounts.destination();
+        if (!source.status().canBeDebited()) {
+            throw AccountRuleViolationException.sourceNotActive();
+        }
+        if (!destination.status().canBeCredited()) {
+            throw AccountRuleViolationException.destinationClosed();
+        }
         if (!source.currency().equals(command.currency())
                 || !destination.currency().equals(command.currency())) {
             throw new CurrencyMismatchException();
         }
         if (!source.hasSufficientBalanceFor(command.amount())) {
             throw new InsufficientBalanceException();
+        }
+        if (source.exceedsPerTransactionLimit(command.amount())) {
+            throw AccountRuleViolationException.limitExceeded();
+        }
+        if (source.dailyTransferLimit() != null
+                && !dailyTransferUsageRepository.tryConsume(
+                        source.id(), businessCalendar.today(), command.amount(), source.dailyTransferLimit())) {
+            throw AccountRuleViolationException.limitExceeded();
         }
 
         accountRepository.debit(source.id(), command.amount());
@@ -147,6 +175,12 @@ public class TransferService {
         }
         if (command.amount() == null || command.amount().signum() <= 0) {
             throw new InvalidTransferException("Amount must be positive");
+        }
+        if (!CurrencyUnits.isKnown(command.currency())) {
+            throw new InvalidTransferException("Currency is not supported");
+        }
+        if (!CurrencyUnits.fitsMinorUnits(command.amount(), command.currency())) {
+            throw AccountRuleViolationException.invalidAmountScale();
         }
     }
 

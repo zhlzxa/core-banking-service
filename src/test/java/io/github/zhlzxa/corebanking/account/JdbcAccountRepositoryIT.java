@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -59,6 +60,42 @@ class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
     @Test
     void creditToUnknownAccountFails() {
         assertThatThrownBy(() -> accountRepository.credit(999, BigDecimal.ONE))
+                .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
+    }
+
+    @Test
+    void statusAndReasonAreStoredTogether() {
+        accountRepository.updateStatus(10, AccountStatus.FROZEN, StatusReason.COURT_ORDER);
+
+        Account frozen = accountRepository.findById(10).orElseThrow();
+        assertThat(frozen.status()).isEqualTo(AccountStatus.FROZEN);
+        assertThat(frozen.statusReason()).isEqualTo(StatusReason.COURT_ORDER);
+    }
+
+    @Test
+    void aFrozenAccountWithoutReasonIsRejectedByTheDatabase() {
+        assertThatThrownBy(() -> accountRepository.updateStatus(10, AccountStatus.FROZEN, null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_accounts_frozen_has_reason");
+    }
+
+    @Test
+    void limitsCanBeSetAndRemoved() {
+        accountRepository.updateLimits(10, new BigDecimal("500.00"), new BigDecimal("2000.00"));
+        assertThat(accountRepository.findById(10).orElseThrow().dailyTransferLimit())
+                .isEqualByComparingTo("2000.00");
+
+        accountRepository.updateLimits(10, null, null);
+        Account unlimited = accountRepository.findById(10).orElseThrow();
+        assertThat(unlimited.perTransactionLimit()).isNull();
+        assertThat(unlimited.dailyTransferLimit()).isNull();
+    }
+
+    @Test
+    void updatingAnUnknownAccountFails() {
+        assertThatThrownBy(() -> accountRepository.updateStatus(999, AccountStatus.CLOSED, null))
+                .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
+        assertThatThrownBy(() -> accountRepository.updateLimits(999, null, null))
                 .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
     }
 }

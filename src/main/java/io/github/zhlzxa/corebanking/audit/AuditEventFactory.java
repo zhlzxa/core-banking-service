@@ -16,6 +16,7 @@ public class AuditEventFactory {
     static final String TRANSFER_REQUEST = "TRANSFER_REQUEST";
     static final String HTTP_ENDPOINT = "HTTP_ENDPOINT";
     static final String PAYEE = "PAYEE";
+    static final String ACCOUNT = "ACCOUNT";
 
     private final Clock clock;
 
@@ -89,6 +90,29 @@ public class AuditEventFactory {
                 AuditOutcome.SUCCESS,
                 null,
                 Map.of());
+    }
+
+    /**
+     * A back-office change to an account's status or limits.
+     *
+     * @param details reason and previous values; the actor is the member of staff who acted
+     */
+    public AuditEvent accountChanged(
+            AuditContext context, AuditAction action, long accountId, Map<String, Object> details) {
+        return new AuditEvent(
+                UUID.randomUUID(),
+                clock.instant(),
+                context.actor(),
+                action,
+                ACCOUNT,
+                Long.toString(accountId),
+                null,
+                null,
+                context.correlationId(),
+                context.channel(),
+                AuditOutcome.SUCCESS,
+                null,
+                details);
     }
 
     /** A request was stopped by authentication or authorization before any business logic ran. */

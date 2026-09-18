@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-18
+
+### Added
+
+- Account status lifecycle (`ACTIVE`, `FROZEN`, `DORMANT`, `CLOSED`): frozen
+  and dormant accounts receive but cannot send; closed accounts do neither.
+- Per-currency amount precision check (`INVALID_AMOUNT_SCALE`).
+- Per-transaction and daily transfer limits; daily limits are enforced with an
+  atomic conditional upsert and reset at midnight Hong Kong time.
+- Back-office endpoints to freeze, unfreeze and close accounts and to change
+  limits, restricted to `ADMIN` with scope `bank.accounts.admin` and audited.
+- ADR-0007 on cumulative limit enforcement.
+
+### Changed
+
+- Account responses include the account status.
+
 ## [0.7.0] - 2026-09-18
 
 ### Added
@@ -125,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.4.0...v0.5.0

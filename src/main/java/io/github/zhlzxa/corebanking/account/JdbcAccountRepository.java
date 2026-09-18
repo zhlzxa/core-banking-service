@@ -5,12 +5,19 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
 class JdbcAccountRepository implements AccountRepository {
+
+    private static final String COLUMNS = """
+            SELECT id, user_id, currency, balance, status, status_reason,
+                   per_transaction_limit, daily_transfer_limit
+            FROM accounts
+            """;
 
     private final JdbcClient jdbc;
 
@@ -20,7 +27,7 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public Optional<Account> findById(long accountId) {
-        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id")
+        return jdbc.sql(COLUMNS + " WHERE id = :id")
                 .param("id", accountId)
                 .query(JdbcAccountRepository::mapAccount)
                 .optional();
@@ -28,7 +35,7 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public List<Account> findByOwner(long userId) {
-        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE user_id = :userId ORDER BY id")
+        return jdbc.sql(COLUMNS + " WHERE user_id = :userId ORDER BY id")
                 .param("userId", userId)
                 .query(JdbcAccountRepository::mapAccount)
                 .list();
@@ -36,7 +43,7 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public Optional<Account> findOwned(long accountId, long userId) {
-        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id AND user_id = :userId")
+        return jdbc.sql(COLUMNS + " WHERE id = :id AND user_id = :userId")
                 .param("id", accountId)
                 .param("userId", userId)
                 .query(JdbcAccountRepository::mapAccount)
@@ -45,7 +52,7 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public Optional<Account> findByIdForUpdate(long accountId) {
-        return jdbc.sql("SELECT id, user_id, currency, balance FROM accounts WHERE id = :id FOR UPDATE")
+        return jdbc.sql(COLUMNS + " WHERE id = :id FOR UPDATE")
                 .param("id", accountId)
                 .query(JdbcAccountRepository::mapAccount)
                 .optional();
@@ -79,11 +86,50 @@ class JdbcAccountRepository implements AccountRepository {
         }
     }
 
+    @Override
+    public void updateStatus(long accountId, AccountStatus status, @Nullable StatusReason reason) {
+        int updated = jdbc.sql("""
+                        UPDATE accounts SET status = :status, status_reason = :reason, updated_at = now()
+                        WHERE id = :id
+                        """)
+                .param("id", accountId)
+                .param("status", status.name())
+                .param("reason", reason == null ? null : reason.name())
+                .update();
+        if (updated != 1) {
+            throw new JdbcUpdateAffectedIncorrectNumberOfRowsException(
+                    "update status of account " + accountId, 1, updated);
+        }
+    }
+
+    @Override
+    public void updateLimits(
+            long accountId, @Nullable BigDecimal perTransactionLimit, @Nullable BigDecimal dailyLimit) {
+        int updated = jdbc.sql("""
+                        UPDATE accounts
+                        SET per_transaction_limit = :perTransaction, daily_transfer_limit = :daily, updated_at = now()
+                        WHERE id = :id
+                        """)
+                .param("id", accountId)
+                .param("perTransaction", perTransactionLimit)
+                .param("daily", dailyLimit)
+                .update();
+        if (updated != 1) {
+            throw new JdbcUpdateAffectedIncorrectNumberOfRowsException(
+                    "update limits of account " + accountId, 1, updated);
+        }
+    }
+
     private static Account mapAccount(ResultSet rs, int rowNum) throws SQLException {
+        String reason = rs.getString("status_reason");
         return new Account(
                 rs.getLong("id"),
                 rs.getObject("user_id", Long.class),
                 rs.getString("currency"),
-                rs.getBigDecimal("balance"));
+                rs.getBigDecimal("balance"),
+                AccountStatus.valueOf(rs.getString("status")),
+                reason == null ? null : StatusReason.valueOf(reason),
+                rs.getBigDecimal("per_transaction_limit"),
+                rs.getBigDecimal("daily_transfer_limit"));
     }
 }

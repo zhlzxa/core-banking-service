@@ -14,6 +14,8 @@ import static org.mockito.Mockito.when;
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
+import io.github.zhlzxa.corebanking.account.AccountStatus;
+import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditAction;
 import io.github.zhlzxa.corebanking.audit.AuditActor;
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
@@ -23,6 +25,8 @@ import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.audit.AuditOutcome;
 import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
+import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
@@ -32,6 +36,8 @@ import io.github.zhlzxa.corebanking.transaction.TransactionType;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -65,6 +71,13 @@ class TransferServiceTest {
 
     @Mock
     private IndependentAuditRecorder independentAuditRecorder;
+
+    @Mock
+    private DailyTransferUsageRepository dailyTransferUsageRepository;
+
+    @Spy
+    private BusinessCalendar businessCalendar = new BusinessCalendar(
+            Clock.fixed(Instant.parse("2026-09-18T17:30:00Z"), ZoneOffset.UTC), ZoneId.of("Asia/Hong_Kong"));
 
     @Spy
     private AuditEventFactory auditEventFactory =
@@ -179,6 +192,100 @@ class TransferServiceTest {
     }
 
     @Test
+    void frozenSourceCannotSend() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00", AccountStatus.FROZEN, null);
+        givenAccount(2, "HKD", "0.00");
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.SOURCE_ACCOUNT_NOT_ACTIVE);
+    }
+
+    @Test
+    void frozenDestinationCanStillReceive() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00", AccountStatus.FROZEN, null);
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
+
+        transferService.transfer(AUDIT, command(1, 2, "100.00"));
+
+        verify(accountRepository).credit(2, AMOUNT);
+    }
+
+    @Test
+    void closedDestinationCannotReceive() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00", AccountStatus.CLOSED, null);
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.DESTINATION_ACCOUNT_CLOSED);
+    }
+
+    @Test
+    void amountAbovePerTransactionLimitIsRejected() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00", AccountStatus.ACTIVE, new BigDecimal("99.99"));
+        givenAccount(2, "HKD", "0.00");
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.TRANSFER_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void dailyLimitIsConsumedForTheHongKongBusinessDay() {
+        givenClaimedRequest();
+        givenAccountWithDailyLimit(1, "500.00");
+        givenAccount(2, "HKD", "0.00");
+        when(dailyTransferUsageRepository.tryConsume(1, LocalDate.of(2026, 9, 19), AMOUNT, new BigDecimal("500.00")))
+                .thenReturn(true);
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
+
+        transferService.transfer(AUDIT, command(1, 2, "100.00"));
+
+        verify(accountRepository).debit(1, AMOUNT);
+    }
+
+    @Test
+    void exhaustedDailyLimitStopsTheTransfer() {
+        givenClaimedRequest();
+        givenAccountWithDailyLimit(1, "500.00");
+        givenAccount(2, "HKD", "0.00");
+        when(dailyTransferUsageRepository.tryConsume(anyLong(), any(), any(), any()))
+                .thenReturn(false);
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.TRANSFER_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void accountsWithoutDailyLimitDoNotTrackUsage() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00");
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
+
+        transferService.transfer(AUDIT, command(1, 2, "100.00"));
+
+        verifyNoInteractions(dailyTransferUsageRepository);
+    }
+
+    @Test
+    void amountWithMorePrecisionThanTheCurrencyIsRejectedBeforeAnyLock() {
+        TransferCommand tooPrecise = new TransferCommand(ownerOf(1), "req-1", 1, 2, new BigDecimal("10.005"), "HKD");
+
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, tooPrecise))
+                .isInstanceOfSatisfying(
+                        AccountRuleViolationException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.INVALID_AMOUNT_SCALE));
+        verifyNoInteractions(accountRepository, transactionRepository);
+    }
+
+    @Test
+    void unknownCurrencyIsAnInvalidTransfer() {
+        TransferCommand unknown = new TransferCommand(ownerOf(1), "req-1", 1, 2, BigDecimal.TEN, "XYZ");
+
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, unknown)).isInstanceOf(InvalidTransferException.class);
+    }
+
+    @Test
     void currencyMismatchIsRejected() {
         givenClaimedRequest();
         givenAccount(1, "HKD", "1000.00");
@@ -218,7 +325,8 @@ class TransferServiceTest {
     void bankInternalAccountIsNotAValidDestination() {
         givenAccount(1, "HKD", "1000.00");
         when(accountRepository.findByIdForUpdate(2))
-                .thenReturn(Optional.of(new Account(2, null, "HKD", BigDecimal.ZERO)));
+                .thenReturn(Optional.of(
+                        new Account(2, null, "HKD", BigDecimal.ZERO, AccountStatus.ACTIVE, null, null, null)));
 
         assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
                 .isInstanceOf(AccountNotFoundException.class);
@@ -266,9 +374,38 @@ class TransferServiceTest {
         when(transactionRepository.insertPendingIfAbsent(any())).thenReturn(Optional.of(TX_ID));
     }
 
+    private void givenAccount(long id, String currency, String balance, AccountStatus status, BigDecimal limit) {
+        when(accountRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(
+                        new Account(id, ownerOf(id), currency, new BigDecimal(balance), status, null, limit, null)));
+    }
+
+    private void givenAccountWithDailyLimit(long id, String dailyLimit) {
+        when(accountRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(new Account(
+                        id,
+                        ownerOf(id),
+                        "HKD",
+                        new BigDecimal("1000.00"),
+                        AccountStatus.ACTIVE,
+                        null,
+                        null,
+                        new BigDecimal(dailyLimit))));
+    }
+
+    private void assertRuleViolation(TransferCommand command, ErrorCode expected) {
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command))
+                .isInstanceOfSatisfying(
+                        AccountRuleViolationException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(expected));
+        verify(accountRepository, never()).debit(anyLong(), any());
+        verifyNoInteractions(ledgerRepository);
+    }
+
     private void givenAccount(long id, String currency, String balance) {
         when(accountRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(new Account(id, ownerOf(id), currency, new BigDecimal(balance))));
+                .thenReturn(Optional.of(new Account(
+                        id, ownerOf(id), currency, new BigDecimal(balance), AccountStatus.ACTIVE, null, null, null)));
     }
 
     private static TransferCommand command(long from, long to, String amount) {

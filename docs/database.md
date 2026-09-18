@@ -15,6 +15,7 @@ erDiagram
     transactions ||--|{ ledger_entries : "balanced by"
     users ||--o{ audit_events : "acted"
     users ||--o{ payees : "saves"
+    accounts ||--o{ daily_transfer_usage : "consumes"
     transactions ||--o{ audit_events : "audited by"
 
     users {
@@ -29,6 +30,15 @@ erDiagram
         bigint user_id FK "null for bank-internal accounts"
         char3 currency
         numeric balance "never negative"
+        varchar status "ACTIVE, FROZEN, DORMANT, CLOSED"
+        varchar status_reason "required when FROZEN"
+        numeric per_transaction_limit "null = no limit"
+        numeric daily_transfer_limit "null = no limit"
+    }
+    daily_transfer_usage {
+        bigint account_id PK
+        date usage_date PK "business day, Asia/Hong_Kong"
+        numeric used_amount
     }
     transactions {
         bigint id PK
@@ -87,6 +97,9 @@ erDiagram
 | The audit trail is append-only | trigger `trg_audit_events_append_only` rejects `UPDATE` and `DELETE` |
 | Every non-successful audit event has a reason | `ck_audit_events_reason` |
 | Audited users and transactions cannot be deleted | foreign keys without `ON DELETE` actions |
+| A frozen account records why | `ck_accounts_frozen_has_reason` |
+| Status and reason come from closed sets | `ck_accounts_status`, `ck_accounts_status_reason` |
+| Limits are positive | `ck_accounts_limits_positive` |
 | A customer saves each destination once | `uq_payees_owner_destination` (`NULLS NOT DISTINCT`) |
 
 Every completed transaction has ledger legs whose debits equal its credits.
@@ -140,3 +153,4 @@ units.
 | V3 | Append-only business audit trail |
 | V4 | Indexes for account and history read paths |
 | V5 | Saved payees, maintained through JPA with optimistic locking |
+| V6 | Account status lifecycle, transfer limits and daily usage |
