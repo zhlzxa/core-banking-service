@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
@@ -50,7 +51,7 @@ class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
     @Test
     void debitNeverOverdrawsEvenWithoutServiceLevelCheck() {
         assertThatThrownBy(() -> accountRepository.debit(10, new BigDecimal("100.01")))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
 
         assertThat(accountRepository.findById(10).orElseThrow().balance()).isEqualByComparingTo("100.00");
     }
@@ -58,6 +59,6 @@ class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
     @Test
     void creditToUnknownAccountFails() {
         assertThatThrownBy(() -> accountRepository.credit(999, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
     }
 }

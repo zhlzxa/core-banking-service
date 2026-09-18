@@ -16,6 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -52,14 +53,14 @@ class TransferRollbackIT extends AbstractIntegrationIT {
 
     @Test
     void failureWhilePostingTheCreditLegRollsBackEverything() {
-        doThrow(new IllegalStateException("Simulated storage failure"))
+        doThrow(new DataAccessResourceFailureException("Simulated storage failure"))
                 .when(ledgerRepository)
                 .append(argThat(entry -> entry.direction() == EntryDirection.CREDIT));
 
         assertThatThrownBy(() -> transferService.transfer(
                         TestAuditContexts.customer(alice),
                         new TransferCommand(alice, "req-rollback", 1, 2, new BigDecimal("100.00"), "HKD")))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(DataAccessResourceFailureException.class);
 
         assertThat(data.balanceOf(1)).isEqualByComparingTo("1000");
         assertThat(data.balanceOf(2)).isEqualByComparingTo("500");

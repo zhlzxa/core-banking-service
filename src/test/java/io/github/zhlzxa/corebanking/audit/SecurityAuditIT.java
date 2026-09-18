@@ -13,6 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -78,7 +79,7 @@ class SecurityAuditIT extends AbstractIntegrationIT {
 
     @Test
     void auditFailureNeverTurnsARejectionIntoAServerError() {
-        doThrow(new IllegalStateException("Simulated audit store failure"))
+        doThrow(new DataAccessResourceFailureException("Simulated audit store failure"))
                 .when(auditEventRepository)
                 .append(any());
 

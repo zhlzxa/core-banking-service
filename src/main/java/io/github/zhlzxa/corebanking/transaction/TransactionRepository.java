@@ -32,7 +32,8 @@ public interface TransactionRepository {
     List<BankTransaction> findHistory(long accountId, @Nullable HistoryCursor after, int limit);
 
     /**
-     * @throws IllegalStateException if the transaction does not exist
+     * @throws org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException if the
+     *     transaction does not exist
      */
     void updateStatus(long transactionId, TransactionStatus status);
 }
