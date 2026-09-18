@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-18
+
+### Added
+
+- Correlation id for every request: accepted from a well-formed
+  `X-Correlation-Id` header or generated, echoed in the response, included in
+  every log line and every error body.
+- Error code catalogue and retry guidance in `docs/api-errors.md`.
+
+### Changed
+
+- 401 and 403 responses raised by the security layer are RFC 9457 problem
+  documents with `code` `UNAUTHENTICATED` or `ACCESS_DENIED`, like all other
+  errors.
+- Framework errors such as unknown paths or unsupported methods carry a
+  `code` and correlation id.
+- JSON numbers are deserialised into exact decimals.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
@@ -56,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/zhlzxa/core-banking-service/releases/tag/v0.1.0
