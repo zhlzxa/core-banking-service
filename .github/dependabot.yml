@@ -22,3 +22,9 @@ updates:
       interval: weekly
     commit-message:
       prefix: build
+    # The service targets the Java 21 LTS release. Base images receive patch
+    # and minor updates; a move to the next LTS is a deliberate change made
+    # together with java.version in pom.xml, never an automated bump.
+    ignore:
+      - dependency-name: eclipse-temurin
+        update-types: ["version-update:semver-major"]
