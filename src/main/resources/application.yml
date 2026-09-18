@@ -20,6 +20,8 @@ spring:
       acks: all
       properties:
         enable.idempotence: true
+    consumer:
+      auto-offset-reset: earliest
   jpa:
     # The schema is owned by Flyway; Hibernate only verifies that the mappings match it.
     hibernate:
@@ -94,3 +96,5 @@ corebanking:
       interval: 1s
     cleanup:
       interval: 1h
+  notifications:
+    enabled: true

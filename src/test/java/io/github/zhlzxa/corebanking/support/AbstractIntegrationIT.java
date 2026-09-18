@@ -44,6 +44,8 @@ public abstract class AbstractIntegrationIT {
         // Tests trigger reconciliation explicitly instead of racing a background schedule.
         registry.add("corebanking.fps.reconciliation.enabled", () -> "false");
         registry.add("corebanking.outbox.publisher.enabled", () -> "false");
+        // No broker runs for most tests; tests that need Kafka start its listener themselves.
+        registry.add("corebanking.notifications.enabled", () -> "false");
         // Lets tests assert the number of SQL statements an operation issues (N+1 regressions).
         registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
     }
