@@ -101,6 +101,39 @@ class CashPostingService {
         }
         long transactionId = ((Claim.New) claim).transactionId();
 
+        checkRules(deposit, customer, command);
+
+        BankTransaction completed =
+                ledgerPoster.post(transactionId, debitAccountId, creditAccountId, command.amount(), command.currency());
+        auditEventRepository.append(auditEventFactory.movementCompleted(
+                audit, kind, command.requestId(), transactionId, customer.ownerUserId()));
+        log.info("Cash movement completed: kind={}, transactionId={}", kind, transactionId);
+        return completed;
+    }
+
+    /**
+     * Checks a withdrawal against the account's current state without moving money, so that a
+     * request for approval fails early if it could not be paid out now. The same rules are checked
+     * again on the locked account when the withdrawal is executed. A failure is audited as a
+     * rejected withdrawal.
+     */
+    void checkWithdrawable(AuditContext audit, CashCommand command) {
+        try {
+            validate(command);
+            cashAccountFor(command.currency());
+            Account customer = accountRepository
+                    .findById(command.accountId())
+                    .filter(Account::isCustomerAccount)
+                    .orElseThrow(AccountNotFoundException::new);
+            checkRules(false, customer, command);
+        } catch (RuntimeException ex) {
+            bestEffortAuditRecorder.record(auditEventFactory.movementUnsuccessful(
+                    audit, MovementKind.CASH_WITHDRAWAL, command.requestId(), ex, instruction(command), null));
+            throw ex;
+        }
+    }
+
+    private static void checkRules(boolean deposit, Account customer, CashCommand command) {
         if (deposit && !customer.status().canBeCredited()) {
             throw AccountRuleViolationException.destinationClosed();
         }
@@ -113,13 +146,6 @@ class CashPostingService {
         if (!deposit && !customer.hasSufficientBalanceFor(command.amount())) {
             throw new InsufficientBalanceException();
         }
-
-        BankTransaction completed =
-                ledgerPoster.post(transactionId, debitAccountId, creditAccountId, command.amount(), command.currency());
-        auditEventRepository.append(auditEventFactory.movementCompleted(
-                audit, kind, command.requestId(), transactionId, customer.ownerUserId()));
-        log.info("Cash movement completed: kind={}, transactionId={}", kind, transactionId);
-        return completed;
     }
 
     private static void validate(CashCommand command) {

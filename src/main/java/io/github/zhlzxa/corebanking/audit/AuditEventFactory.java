@@ -20,6 +20,7 @@ public class AuditEventFactory {
     static final String HTTP_ENDPOINT = "HTTP_ENDPOINT";
     static final String PAYEE = "PAYEE";
     static final String ACCOUNT = "ACCOUNT";
+    static final String WITHDRAWAL_APPROVAL = "WITHDRAWAL_APPROVAL";
 
     private final Clock clock;
 
@@ -112,6 +113,31 @@ public class AuditEventFactory {
                 action,
                 ACCOUNT,
                 Long.toString(accountId),
+                null,
+                null,
+                AuditOutcome.SUCCESS,
+                null,
+                details);
+    }
+
+    /**
+     * A step in the four-eyes approval of a withdrawal: requested by the maker, granted or declined by
+     * the checker, or expired.
+     *
+     * @param onBehalfOfUserId the customer whose account the withdrawal is for
+     */
+    public AuditEvent approvalChanged(
+            AuditContext context,
+            AuditAction action,
+            long approvalId,
+            @Nullable Long onBehalfOfUserId,
+            Map<String, Object> details) {
+        return event(
+                context,
+                onBehalfOfUserId,
+                action,
+                WITHDRAWAL_APPROVAL,
+                Long.toString(approvalId),
                 null,
                 null,
                 AuditOutcome.SUCCESS,
