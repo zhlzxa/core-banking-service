@@ -29,7 +29,7 @@ public record TransferRequest(
 
         @NotNull @Pattern(regexp = "[A-Z]{3}") String currency) {
 
-    TransferCommand toCommand() {
-        return new TransferCommand(requestId, fromAccountId, toAccountId, amount, currency);
+    TransferCommand toCommand(long customerId) {
+        return new TransferCommand(customerId, requestId, fromAccountId, toAccountId, amount, currency);
     }
 }

@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 class JdbcTransactionRepositoryIT extends AbstractIntegrationIT {
 
     private static final NewTransaction TRANSFER =
-            new NewTransaction("req-1", TransactionType.TRANSFER, 1, 2, new BigDecimal("25.00"), "HKD");
+            new NewTransaction("req-1", null, TransactionType.TRANSFER, 1, 2, new BigDecimal("25.00"), "HKD");
 
     @Autowired
     private TransactionRepository transactionRepository;

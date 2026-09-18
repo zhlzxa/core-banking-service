@@ -3,6 +3,8 @@ package io.github.zhlzxa.corebanking.transfer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
+import io.github.zhlzxa.corebanking.support.TestSecurityContexts;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -19,7 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.concurrent.DelegatingSecurityContextCallable;
 
 /**
  * Runs genuinely concurrent transfers against PostgreSQL. All tasks are released at the same instant
@@ -33,13 +35,17 @@ class TransferConcurrencyIT extends AbstractIntegrationIT {
     private TransferService transferService;
 
     @Autowired
-    private JdbcClient jdbc;
+    private TestDataFactory data;
 
     private ExecutorService executor;
+    private long alice;
+    private long bob;
 
     @BeforeEach
-    void startExecutor() {
+    void setUp() {
         executor = Executors.newFixedThreadPool(THREADS);
+        alice = data.createCustomer("alice-sub");
+        bob = data.createCustomer("bob-sub");
     }
 
     @AfterEach
@@ -49,29 +55,29 @@ class TransferConcurrencyIT extends AbstractIntegrationIT {
 
     @Test
     void oppositeTransfersBetweenTheSameAccountsNeverDeadlock() throws Exception {
-        seedAccount(1, "10000");
-        seedAccount(2, "10000");
+        data.createAccount(1, alice, "HKD", "10000");
+        data.createAccount(2, bob, "HKD", "10000");
         List<Callable<BankTransaction>> tasks = new ArrayList<>();
         for (int i = 0; i < 40; i++) {
             boolean forward = i % 2 == 0;
-            tasks.add(transfer("req-" + i, forward ? 1 : 2, forward ? 2 : 1, "10.00"));
+            tasks.add(forward ? transfer(alice, "req-" + i, 1, 2, "10.00") : transfer(bob, "req-" + i, 2, 1, "10.00"));
         }
 
         List<Outcome> outcomes = runConcurrently(tasks);
 
         assertThat(outcomes).allMatch(Outcome::succeeded);
-        assertThat(balanceOf(1)).isEqualByComparingTo("10000");
-        assertThat(balanceOf(2)).isEqualByComparingTo("10000");
-        assertLedgerIsBalanced();
+        assertThat(data.balanceOf(1)).isEqualByComparingTo("10000");
+        assertThat(data.balanceOf(2)).isEqualByComparingTo("10000");
+        assertThat(data.unbalancedTransactions()).isZero();
     }
 
     @Test
     void concurrentDebitsNeverOverdrawTheSourceAccount() throws Exception {
-        seedAccount(1, "100.00");
-        seedAccount(2, "0.00");
+        data.createAccount(1, alice, "HKD", "100.00");
+        data.createAccount(2, bob, "HKD", "0.00");
         List<Callable<BankTransaction>> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
-            tasks.add(transfer("req-" + i, 1, 2, "10.00"));
+            tasks.add(transfer(alice, "req-" + i, 1, 2, "10.00"));
         }
 
         List<Outcome> outcomes = runConcurrently(tasks);
@@ -79,33 +85,33 @@ class TransferConcurrencyIT extends AbstractIntegrationIT {
         assertThat(outcomes.stream().filter(Outcome::succeeded)).hasSize(10);
         assertThat(outcomes.stream().filter(o -> o.failure() instanceof InsufficientBalanceException))
                 .hasSize(10);
-        assertThat(balanceOf(1)).isEqualByComparingTo("0.00");
-        assertThat(balanceOf(2)).isEqualByComparingTo("100.00");
-        assertLedgerIsBalanced();
+        assertThat(data.balanceOf(1)).isEqualByComparingTo("0.00");
+        assertThat(data.balanceOf(2)).isEqualByComparingTo("100.00");
+        assertThat(data.unbalancedTransactions()).isZero();
     }
 
     @Test
     void concurrentDuplicatesOfOneRequestMoveMoneyOnce() throws Exception {
-        seedAccount(1, "1000.00");
-        seedAccount(2, "0.00");
+        data.createAccount(1, alice, "HKD", "1000.00");
+        data.createAccount(2, bob, "HKD", "0.00");
         List<Callable<BankTransaction>> tasks = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
-            tasks.add(transfer("req-same", 1, 2, "250.00"));
+            tasks.add(transfer(alice, "req-same", 1, 2, "250.00"));
         }
 
         List<Outcome> outcomes = runConcurrently(tasks);
 
         assertThat(outcomes).allMatch(Outcome::succeeded);
         assertThat(outcomes.stream().map(o -> o.transaction().id()).distinct()).hasSize(1);
-        assertThat(balanceOf(1)).isEqualByComparingTo("750.00");
-        assertThat(jdbc.sql("SELECT count(*) FROM transactions")
-                        .query(Integer.class)
-                        .single())
-                .isEqualTo(1);
+        assertThat(data.balanceOf(1)).isEqualByComparingTo("750.00");
+        assertThat(data.count("transactions")).isEqualTo(1);
     }
 
-    private Callable<BankTransaction> transfer(String requestId, long from, long to, String amount) {
-        return () -> transferService.transfer(new TransferCommand(requestId, from, to, new BigDecimal(amount), "HKD"));
+    /** A transfer task that runs with the given customer's security context on a worker thread. */
+    private Callable<BankTransaction> transfer(long customer, String requestId, long from, long to, String amount) {
+        TransferCommand command = new TransferCommand(customer, requestId, from, to, new BigDecimal(amount), "HKD");
+        return new DelegatingSecurityContextCallable<>(
+                () -> transferService.transfer(command), TestSecurityContexts.customer(customer, "bank.transfer"));
     }
 
     private List<Outcome> runConcurrently(List<Callable<BankTransaction>> tasks) throws InterruptedException {
@@ -130,32 +136,6 @@ class TransferConcurrencyIT extends AbstractIntegrationIT {
             }
         }
         return outcomes;
-    }
-
-    private void seedAccount(long id, String balance) {
-        jdbc.sql("INSERT INTO accounts (id, currency, balance) VALUES (:id, 'HKD', :balance)")
-                .param("id", id)
-                .param("balance", new BigDecimal(balance))
-                .update();
-    }
-
-    private BigDecimal balanceOf(long accountId) {
-        return jdbc.sql("SELECT balance FROM accounts WHERE id = :id")
-                .param("id", accountId)
-                .query(BigDecimal.class)
-                .single();
-    }
-
-    private void assertLedgerIsBalanced() {
-        Integer unbalanced = jdbc.sql("""
-                        SELECT count(*) FROM (
-                            SELECT transaction_id
-                            FROM ledger_entries
-                            GROUP BY transaction_id
-                            HAVING sum(CASE direction WHEN 'DEBIT' THEN amount ELSE -amount END) <> 0
-                        ) unbalanced
-                        """).query(Integer.class).single();
-        assertThat(unbalanced).isZero();
     }
 
     private record Outcome(BankTransaction transaction, Throwable failure) {

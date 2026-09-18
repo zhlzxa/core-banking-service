@@ -136,6 +136,31 @@ class TransferServiceTest {
     }
 
     @Test
+    void sourceAccountOfAnotherCustomerIsReportedAsNotFound() {
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00");
+        TransferCommand fromSomeoneElsesAccount =
+                new TransferCommand(ownerOf(2), "req-1", 1, 2, new BigDecimal("100.00"), "HKD");
+
+        assertThatThrownBy(() -> transferService.transfer(fromSomeoneElsesAccount))
+                .isInstanceOf(AccountNotFoundException.class);
+
+        verifyNoInteractions(transactionRepository, ledgerRepository);
+    }
+
+    @Test
+    void bankInternalAccountIsNotAValidDestination() {
+        givenAccount(1, "HKD", "1000.00");
+        when(accountRepository.findByIdForUpdate(2))
+                .thenReturn(Optional.of(new Account(2, null, "HKD", BigDecimal.ZERO)));
+
+        assertThatThrownBy(() -> transferService.transfer(command(1, 2, "100.00")))
+                .isInstanceOf(AccountNotFoundException.class);
+
+        verifyNoInteractions(transactionRepository, ledgerRepository);
+    }
+
+    @Test
     void retryWithSameInstructionReturnsOriginalTransactionWithoutMovingMoney() {
         givenAccount(1, "HKD", "0.00");
         givenAccount(2, "HKD", "0.00");
@@ -166,23 +191,29 @@ class TransferServiceTest {
         verifyNoInteractions(ledgerRepository);
     }
 
+    /** Each test account is owned by its own customer, whose user id is derived from the account id. */
+    private static long ownerOf(long accountId) {
+        return 1000 + accountId;
+    }
+
     private void givenClaimedRequest() {
         when(transactionRepository.insertPendingIfAbsent(any())).thenReturn(Optional.of(TX_ID));
     }
 
     private void givenAccount(long id, String currency, String balance) {
         when(accountRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(new Account(id, currency, new BigDecimal(balance))));
+                .thenReturn(Optional.of(new Account(id, ownerOf(id), currency, new BigDecimal(balance))));
     }
 
     private static TransferCommand command(long from, long to, String amount) {
-        return new TransferCommand("req-1", from, to, new BigDecimal(amount), "HKD");
+        return new TransferCommand(ownerOf(from), "req-1", from, to, new BigDecimal(amount), "HKD");
     }
 
     private static BankTransaction stored(TransactionStatus status) {
         return new BankTransaction(
                 TX_ID,
                 "req-1",
+                ownerOf(1),
                 TransactionType.TRANSFER,
                 status,
                 1,

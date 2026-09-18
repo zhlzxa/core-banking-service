@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,6 +39,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     ResponseEntity<ProblemDetail> handleBusinessException(BusinessException ex) {
         return respond(problem(ex.errorCode(), ex.getMessage()));
+    }
+
+    /**
+     * Method-level authorization failures are raised inside the controller call and would otherwise
+     * be caught by the generic handler below and reported as 500.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
+        return respond(problem(ErrorCode.ACCESS_DENIED, "The caller is not permitted to perform this operation"));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex) {
+        return respond(problem(ErrorCode.UNAUTHENTICATED, "Authentication is required"));
     }
 
     @ExceptionHandler(Exception.class)

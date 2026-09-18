@@ -8,11 +8,14 @@ import static org.mockito.Mockito.doThrow;
 import io.github.zhlzxa.corebanking.ledger.EntryDirection;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
+import io.github.zhlzxa.corebanking.support.TestSecurityContexts;
 import java.math.BigDecimal;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
@@ -28,12 +31,22 @@ class TransferRollbackIT extends AbstractIntegrationIT {
     private TransferService transferService;
 
     @Autowired
-    private JdbcClient jdbc;
+    private TestDataFactory data;
+
+    private long alice;
 
     @BeforeEach
     void seedAccounts() {
-        jdbc.sql("INSERT INTO accounts (id, currency, balance) VALUES (1, 'HKD', 1000), (2, 'HKD', 500)")
-                .update();
+        alice = data.createCustomer("alice-sub");
+        long bob = data.createCustomer("bob-sub");
+        data.createAccount(1, alice, "HKD", "1000");
+        data.createAccount(2, bob, "HKD", "500");
+        SecurityContextHolder.setContext(TestSecurityContexts.customer(alice, "bank.transfer"));
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -43,23 +56,12 @@ class TransferRollbackIT extends AbstractIntegrationIT {
                 .append(argThat(entry -> entry.direction() == EntryDirection.CREDIT));
 
         assertThatThrownBy(() -> transferService.transfer(
-                        new TransferCommand("req-rollback", 1, 2, new BigDecimal("100.00"), "HKD")))
+                        new TransferCommand(alice, "req-rollback", 1, 2, new BigDecimal("100.00"), "HKD")))
                 .isInstanceOf(IllegalStateException.class);
 
-        assertThat(balanceOf(1)).isEqualByComparingTo("1000");
-        assertThat(balanceOf(2)).isEqualByComparingTo("500");
-        assertThat(count("transactions")).isZero();
-        assertThat(count("ledger_entries")).isZero();
-    }
-
-    private BigDecimal balanceOf(long accountId) {
-        return jdbc.sql("SELECT balance FROM accounts WHERE id = :id")
-                .param("id", accountId)
-                .query(BigDecimal.class)
-                .single();
-    }
-
-    private int count(String table) {
-        return jdbc.sql("SELECT count(*) FROM " + table).query(Integer.class).single();
+        assertThat(data.balanceOf(1)).isEqualByComparingTo("1000");
+        assertThat(data.balanceOf(2)).isEqualByComparingTo("500");
+        assertThat(data.count("transactions")).isZero();
+        assertThat(data.count("ledger_entries")).isZero();
     }
 }
