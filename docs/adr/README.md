@@ -9,6 +9,7 @@ that changes is superseded by a new record.
 |---|---|---|
 | [0001](0001-lock-accounts-in-ascending-id-order.md) | Lock accounts pessimistically in ascending id order | Accepted |
 | [0002](0002-idempotency-through-a-unique-request-id.md) | Make money movements idempotent through a unique request id | Accepted |
+| [0003](0003-delegate-authentication-to-an-oidc-provider.md) | Delegate authentication to an OIDC provider and authorise in three layers | Accepted |
 
 ## Template
 

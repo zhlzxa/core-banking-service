@@ -8,18 +8,29 @@ Migrations merged to `main` are never edited.
 
 ```mermaid
 erDiagram
+    users ||--o{ accounts : "owns"
+    users ||--o{ transactions : "initiates"
     accounts ||--o{ transactions : "from / to"
     accounts ||--o{ ledger_entries : "posted to"
     transactions ||--|{ ledger_entries : "balanced by"
 
+    users {
+        bigint id PK
+        varchar identity_issuer "OIDC iss"
+        varchar identity_subject "OIDC sub"
+        varchar role "CUSTOMER, TELLER, ADMIN"
+        varchar status "ACTIVE, LOCKED, DISABLED"
+    }
     accounts {
         bigint id PK
+        bigint user_id FK "null for bank-internal accounts"
         char3 currency
         numeric balance "never negative"
     }
     transactions {
         bigint id PK
         varchar request_id UK "idempotency key"
+        bigint initiated_by_user_id FK
         varchar transaction_type
         varchar status
         bigint from_account_id FK
@@ -46,6 +57,8 @@ erDiagram
 | Money cannot move from an account to itself | `ck_transactions_distinct_accounts` |
 | Amounts are positive | `ck_transactions_amount_positive`, `ck_ledger_entries_amount_positive` |
 | A ledger leg cannot be posted twice | `uq_ledger_entries_leg` |
+| An external identity maps to exactly one user | `uq_users_external_identity` |
+| Roles and statuses come from a closed set | `ck_users_role`, `ck_users_status` |
 | The ledger is append-only | trigger `trg_ledger_entries_append_only` rejects `UPDATE` and `DELETE` |
 
 Every completed transaction has ledger legs whose debits equal its credits.
