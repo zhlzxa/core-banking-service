@@ -44,6 +44,11 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   Per-transaction and daily limits hold under concurrency and reset at
   midnight Hong Kong time. See
   [ADR-0007](docs/adr/0007-enforce-cumulative-limits-with-an-atomic-conditional-upsert.md).
+- **Cash channels.** Tellers take in and pay out cash at a branch; large
+  withdrawals need a second teller's approval (four eyes). ATMs authenticate
+  as machines, not users. Every action records who acted, for which customer,
+  and through which channel. See
+  [ADR-0008](docs/adr/0008-attribute-staff-and-machine-actions-to-the-customer.md).
 - **Layered authorization.** Callers authenticate with OAuth2 bearer tokens
   from an external OpenID Connect provider. Every transfer checks the token
   scope, the caller's bank role and ownership of the source account. See
@@ -87,6 +92,16 @@ require the role `ADMIN` and the scope `bank.accounts.admin`:
 | `POST /admin/accounts/{id}/unfreeze` | Lift a freeze |
 | `POST /admin/accounts/{id}/close` | Close an account with zero balance |
 | `PUT /admin/accounts/{id}/limits` | Set per-transaction and daily limits |
+
+Branch and self-service operations:
+
+| Method and path | Caller | Purpose |
+|---|---|---|
+| `POST /teller/deposits` | `TELLER`, scope `bank.cash` | Credit cash received at the counter |
+| `POST /teller/withdrawals` | `TELLER`, scope `bank.cash` | Pay out cash; 202 with an approval when above the threshold |
+| `POST /teller/approvals/{id}/approve` | another `TELLER` | Approve and pay out a pending withdrawal |
+| `POST /teller/approvals/{id}/reject` | another `TELLER` | Decline a pending withdrawal |
+| `POST /atm/withdrawals` | registered terminal, scope `bank.atm.withdraw` | Dispense cash |
 
 ### `POST /transfers`
 

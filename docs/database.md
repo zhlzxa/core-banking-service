@@ -16,6 +16,8 @@ erDiagram
     users ||--o{ audit_events : "acted"
     users ||--o{ payees : "saves"
     accounts ||--o{ daily_transfer_usage : "consumes"
+    accounts ||--o{ withdrawal_approvals : "awaits"
+    users ||--o{ withdrawal_approvals : "makes / checks"
     transactions ||--o{ audit_events : "audited by"
 
     users {
@@ -27,7 +29,9 @@ erDiagram
     }
     accounts {
         bigint id PK
-        bigint user_id FK "null for bank-internal accounts"
+        bigint user_id FK "null for internal accounts"
+        varchar account_type "CUSTOMER or INTERNAL"
+        varchar code UK "internal accounts, e.g. CASH-HKD"
         char3 currency
         numeric balance "never negative"
         varchar status "ACTIVE, FROZEN, DORMANT, CLOSED"
@@ -72,6 +76,21 @@ erDiagram
         char3 currency
         bigint version "optimistic lock"
     }
+    withdrawal_approvals {
+        bigint id PK
+        varchar request_id UK
+        bigint maker_user_id FK
+        bigint checker_user_id FK "never the maker"
+        varchar status "PENDING, EXECUTED, REJECTED, EXPIRED"
+        bigint transaction_id FK "set when executed"
+        timestamptz expires_at
+    }
+    terminals {
+        varchar id PK "e.g. ATM-HK-0001"
+        varchar identity_subject "OAuth2 client identity"
+        varchar branch_code
+        varchar status "ACTIVE or DISABLED"
+    }
     ledger_entries {
         bigint id PK
         bigint transaction_id FK
@@ -86,7 +105,8 @@ erDiagram
 
 | Invariant | Mechanism |
 |---|---|
-| A balance is never negative | `ck_accounts_balance_non_negative` |
+| A customer balance is never negative; internal accounts may be | `ck_accounts_balance_non_negative` |
+| A customer account has an owner; an internal account has a code | `ck_accounts_owner_matches_type` |
 | A request id is executed at most once | `uq_transactions_request_id` |
 | Money cannot move from an account to itself | `ck_transactions_distinct_accounts` |
 | Amounts are positive | `ck_transactions_amount_positive`, `ck_ledger_entries_amount_positive` |
@@ -100,6 +120,8 @@ erDiagram
 | A frozen account records why | `ck_accounts_frozen_has_reason` |
 | Status and reason come from closed sets | `ck_accounts_status`, `ck_accounts_status_reason` |
 | Limits are positive | `ck_accounts_limits_positive` |
+| A withdrawal is never approved by the teller who requested it | `ck_withdrawal_approvals_four_eyes` |
+| An approval decision records who decided, when, and the executing transaction | `ck_withdrawal_approvals_decision` |
 | A customer saves each destination once | `uq_payees_owner_destination` (`NULLS NOT DISTINCT`) |
 
 Every completed transaction has ledger legs whose debits equal its credits.
@@ -130,6 +152,8 @@ columns automatically.
 | `idx_audit_events_actor_time` | Recent actions of a user |
 | `idx_audit_events_transaction` | Audit trail of a transaction |
 | `idx_audit_events_request_id` | What happened to a client request, including rejected ones |
+| `idx_audit_events_on_behalf_time` | Everything performed on behalf of a customer |
+| `idx_withdrawal_approvals_pending` | Pending approvals at a branch (partial index) |
 | `idx_audit_events_action_time` | All events of a kind in a period, for example failed logins |
 
 Query plans are inspected with `QueryPlanInvestigationIT`, which is disabled in
@@ -154,3 +178,6 @@ units.
 | V4 | Indexes for account and history read paths |
 | V5 | Saved payees, maintained through JPA with optimistic locking |
 | V6 | Account status lifecycle, transfer limits and daily usage |
+| V7 | Internal accounts (cash), deposit and withdrawal types, on-behalf-of audit attribution |
+| V8 | Four-eyes approval of large teller withdrawals |
+| V9 | Self-service terminal identities |
