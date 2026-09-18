@@ -30,6 +30,8 @@ import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
+import io.github.zhlzxa.corebanking.outbox.IntegrationEvents;
+import io.github.zhlzxa.corebanking.outbox.OutboxRepository;
 import io.github.zhlzxa.corebanking.posting.AccountLocks;
 import io.github.zhlzxa.corebanking.posting.AccountRuleViolationException;
 import io.github.zhlzxa.corebanking.posting.CurrencyMismatchException;
@@ -86,6 +88,9 @@ class TransferServiceTest {
     @Mock
     private DailyTransferUsageRepository dailyTransferUsageRepository;
 
+    @Mock
+    private OutboxRepository outboxRepository;
+
     @Spy
     private BusinessCalendar businessCalendar = new BusinessCalendar(
             Clock.fixed(Instant.parse("2026-09-18T17:30:00Z"), ZoneOffset.UTC), ZoneId.of("Asia/Hong_Kong"));
@@ -106,7 +111,12 @@ class TransferServiceTest {
         transferService = new TransferService(
                 new AccountLocks(accountRepository),
                 new IdempotentTransactions(transactionRepository),
-                new LedgerPoster(accountRepository, ledgerRepository, transactionRepository),
+                new LedgerPoster(
+                        accountRepository,
+                        ledgerRepository,
+                        transactionRepository,
+                        outboxRepository,
+                        new IntegrationEvents(Clock.systemUTC())),
                 new OutgoingLimits(dailyTransferUsageRepository, businessCalendar),
                 auditEventRepository,
                 auditEventFactory,

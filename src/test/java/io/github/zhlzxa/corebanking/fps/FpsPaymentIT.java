@@ -111,12 +111,15 @@ class FpsPaymentIT extends AbstractIntegrationIT {
         assertThat(result).bodyJson().extractingPath("$.status").isEqualTo("PROCESSING");
         assertThat(result).bodyJson().extractingPath("$.externalStatus").isEqualTo("UNKNOWN");
         assertThat(data.balanceOf(ALICE)).isEqualByComparingTo("900.00");
+        assertThat(data.count("outbox_events")).isZero();
 
         makeAllDue();
         assertThat(reconciler.reconcileDuePayments()).isEqualTo(1);
 
         assertThat(statusOf(idOf(result))).isEqualTo("COMPLETED");
         assertThat(data.balanceOf(ALICE)).isEqualByComparingTo("900.00");
+        assertThat(data.count("outbox_events WHERE aggregate_id = '" + idOf(result) + "'"))
+                .isEqualTo(1);
     }
 
     @Test
@@ -145,6 +148,7 @@ class FpsPaymentIT extends AbstractIntegrationIT {
 
         assertThat(statusOf(idOf(result))).isEqualTo("NEEDS_INVESTIGATION");
         assertThat(data.balanceOf(ALICE)).isEqualByComparingTo("900.00");
+        assertThat(data.count("outbox_events")).isZero();
         assertThat(data.count("audit_events WHERE action = 'FPS_PAYMENT_NEEDS_INVESTIGATION'"))
                 .isEqualTo(1);
     }

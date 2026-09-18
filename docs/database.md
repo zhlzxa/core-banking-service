@@ -20,6 +20,8 @@ erDiagram
     accounts ||--o{ withdrawal_approvals : "awaits"
     users ||--o{ withdrawal_approvals : "makes / checks"
     transactions ||--o{ audit_events : "audited by"
+    transactions ||--o{ account_notifications : "notified as"
+    accounts ||--o{ account_notifications : "notified"
 
     users {
         bigint id PK
@@ -96,6 +98,26 @@ erDiagram
         varchar branch_code
         varchar status "ACTIVE or DISABLED"
     }
+    outbox_events {
+        bigint id PK
+        uuid event_id UK "deduplication key for consumers"
+        varchar aggregate_id "transaction id"
+        varchar event_type "TransactionCompleted"
+        jsonb payload "identifiers and amounts only"
+        timestamptz published_at "null until acknowledged"
+        timestamptz next_attempt_at "due time or lease expiry"
+        int attempt_count
+    }
+    processed_events {
+        varchar consumer PK
+        uuid event_id PK
+    }
+    account_notifications {
+        bigint id PK
+        bigint account_id FK
+        bigint transaction_id FK
+        varchar kind "MONEY_IN or MONEY_OUT"
+    }
     ledger_entries {
         bigint id PK
         bigint transaction_id FK
@@ -130,6 +152,7 @@ erDiagram
 | A withdrawal is never approved by the teller who requested it | `ck_withdrawal_approvals_four_eyes` |
 | An approval decision records who decided, when, and the executing transaction | `ck_withdrawal_approvals_decision` |
 | A customer saves each destination once | `uq_payees_owner_destination` (`NULLS NOT DISTINCT`) |
+| An event is stored once and handled once per consumer | `uq_outbox_events_event_id`, primary key of `processed_events` |
 
 Every completed transaction has ledger legs whose debits equal its credits.
 This is guaranteed by the service writing both legs in the same database
@@ -163,6 +186,7 @@ columns automatically.
 | `idx_withdrawal_approvals_pending` | Pending approvals at a branch (partial index) |
 | `idx_transactions_reconciliation` | Unresolved FPS payments that are due (partial index) |
 | `idx_audit_events_action_time` | All events of a kind in a period, for example failed logins |
+| `idx_outbox_events_unpublished` | Unpublished events that are due, and the backlog (partial index) |
 
 Query plans are inspected with `QueryPlanInvestigationIT`, which is disabled in
 CI because plan shapes depend on data volume and statistics. With 200,000
@@ -190,3 +214,4 @@ units.
 | V8 | Four-eyes approval of large teller withdrawals |
 | V9 | Self-service terminal identities |
 | V10 | FPS payment tracking, reversals, FPS clearing accounts, SYSTEM audit channel |
+| V11 | Transactional outbox, consumer deduplication, example account notifications |
