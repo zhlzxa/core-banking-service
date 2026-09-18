@@ -1,0 +1,11 @@
+# Local development profile. Values match compose.yaml and are for a
+# throwaway local database only.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/corebanking}
+    username: ${DB_USERNAME:corebanking}
+    password: ${DB_PASSWORD:local-dev-only}
+
+logging:
+  level:
+    io.github.zhlzxa.corebanking: DEBUG

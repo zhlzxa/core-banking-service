@@ -17,19 +17,87 @@ record of every business action.
 Prerequisites: JDK 21 and Docker.
 
 ```bash
-# Build and run all unit and integration tests
+# Build and run all unit and integration tests (starts PostgreSQL in a container)
 ./mvnw verify
 
-# Start a local PostgreSQL instance
+# Run the service locally against the compose database
 docker compose up -d postgres
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
-## Project documentation
+## What it guarantees
+
+- **Atomicity.** A transfer debits, credits, writes both ledger legs and
+  completes its transaction record in one database transaction. A failure at
+  any step leaves no trace.
+- **Double-entry ledger.** Every transaction produces balanced, append-only
+  ledger entries; the database rejects updates and deletes of ledger rows.
+- **Idempotency.** Each request carries a client-generated `requestId`.
+  Retries return the original result; reusing a key for a different
+  instruction is rejected. See [ADR-0002](docs/adr/0002-idempotency-through-a-unique-request-id.md).
+- **Concurrency safety.** Accounts are locked in ascending id order, so
+  concurrent transfers never overdraw an account and never deadlock. See
+  [ADR-0001](docs/adr/0001-lock-accounts-in-ascending-id-order.md).
+- **Safe error contract.** Errors are RFC 9457 problem responses with a
+  stable `code`; internal details never leak to clients.
+
+These properties are verified by integration tests against a real PostgreSQL
+instance, including concurrent scenarios and injected failures.
+
+## API
+
+### `POST /transfers`
+
+```http
+POST /transfers
+Content-Type: application/json
+
+{
+  "requestId": "3f6c1e2a-8d7b-4a57-9d0e-2b1f5c9a7e10",
+  "fromAccountId": 100,
+  "toAccountId": 200,
+  "amount": "100.00",
+  "currency": "HKD"
+}
+```
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "transactionId": 1,
+  "requestId": "3f6c1e2a-8d7b-4a57-9d0e-2b1f5c9a7e10",
+  "status": "COMPLETED",
+  "fromAccountId": 100,
+  "toAccountId": 200,
+  "amount": "100.00",
+  "currency": "HKD",
+  "createdAt": "2026-09-18T08:30:00.123456Z"
+}
+```
+
+Amounts are always transported as strings so that no client parses them into
+binary floating point.
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 400 | `VALIDATION_FAILED` | A field is missing or invalid; `errors` lists the fields |
+| 400 | `MALFORMED_REQUEST` | The body is not valid JSON |
+| 400 | `INVALID_TRANSFER` | Source and destination are the same account |
+| 404 | `ACCOUNT_NOT_FOUND` | An account does not exist |
+| 409 | `INSUFFICIENT_BALANCE` | The source balance does not cover the amount |
+| 409 | `CURRENCY_MISMATCH` | The currency differs from an account currency |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | The `requestId` was used for a different instruction |
+
+## Documentation
 
 | Document | Purpose |
 |---|---|
+| [docs/database.md](docs/database.md) | Schema, database-enforced invariants, migrations |
+| [docs/adr](docs/adr/README.md) | Architecture decision records |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commit convention, coding standards |
-| [SECURITY.md](SECURITY.md) | How to report a vulnerability, secret-handling rules |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting and secret-handling rules |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 
 ## License
