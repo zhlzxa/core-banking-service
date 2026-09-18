@@ -44,6 +44,13 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   Per-transaction and daily limits hold under concurrency and reset at
   midnight Hong Kong time. See
   [ADR-0007](docs/adr/0007-enforce-cumulative-limits-with-an-atomic-conditional-upsert.md).
+- **Payments to other banks.** FPS payments debit the customer in one
+  transaction, call FPS outside any transaction and record the answer in
+  another. A timeout never refunds: the payment stays processing and is
+  reconciled with FPS, resent with the same end-to-end id if FPS never saw it,
+  or escalated for investigation. Rejections are undone with reversal
+  transactions. See [ADR-0009](docs/adr/0009-treat-payment-timeouts-as-unknown-and-reconcile.md)
+  and [ADR-0010](docs/adr/0010-correct-postings-with-reversal-transactions.md).
 - **Cash channels.** Tellers take in and pay out cash at a branch; large
   withdrawals need a second teller's approval (four eyes). ATMs authenticate
   as machines, not users. Every action records who acted, for which customer,
@@ -78,6 +85,8 @@ instance, including concurrent scenarios and injected failures.
 | `GET /accounts` | `bank.accounts.read` | The caller's accounts and balances |
 | `GET /accounts/{id}` | `bank.accounts.read` | One of the caller's accounts |
 | `GET /accounts/{id}/transactions?size=&cursor=` | `bank.accounts.read` | History, newest first, cursor-paginated |
+| `POST /fps/payments` | `bank.transfer` | Pay an account at another bank; 201 when final, 202 while processing |
+| `GET /fps/payments/{id}` | `bank.accounts.read` | Current state of an FPS payment |
 | `GET /payees` | `bank.payees.read` | The caller's saved payees |
 | `POST /payees` | `bank.payees.write` | Save a payee |
 | `PATCH /payees/{id}` | `bank.payees.write` | Rename a payee; requires the last-read `version` |

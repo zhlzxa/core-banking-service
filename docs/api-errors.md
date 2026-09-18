@@ -38,6 +38,7 @@ problem document with media type `application/problem+json`.
 | 404 | `ACCOUNT_NOT_FOUND` | The account does not exist or is not visible to the caller | Check the account identifier |
 | 404 | `TRANSFER_NOT_FOUND` | The transfer does not exist or does not involve the caller's accounts | Check the transfer identifier |
 | 404 | `APPROVAL_NOT_FOUND` | The withdrawal approval does not exist | Check the approval identifier |
+| 404 | `PAYMENT_NOT_FOUND` | The FPS payment does not exist or was not sent from the caller's accounts | Check the payment identifier |
 | 404 | `PAYEE_NOT_FOUND` | The payee does not exist or belongs to another customer | Reload the payee list |
 | 409 | `INSUFFICIENT_BALANCE` | The source balance does not cover the amount | Retry with the same `requestId` once funded |
 | 409 | `SOURCE_ACCOUNT_NOT_ACTIVE` | The source account is frozen, dormant or closed | Contact the bank |
