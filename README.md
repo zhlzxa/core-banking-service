@@ -43,6 +43,11 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   from an external OpenID Connect provider. Every transfer checks the token
   scope, the caller's bank role and ownership of the source account. See
   [ADR-0003](docs/adr/0003-delegate-authentication-to-an-oidc-provider.md).
+- **Audit trail.** Every transfer outcome and every security rejection is
+  recorded with the authenticated actor and correlation id. Success is audited
+  atomically with the money movement; rejected attempts are audited in an
+  independent transaction so they survive the rollback. See
+  [ADR-0004](docs/adr/0004-audit-success-in-transaction-and-failure-independently.md).
 - **Safe error contract.** Every error is an RFC 9457 problem response with a
   stable `code` and the request's correlation id; internal details never leak
   to clients. See [docs/api-errors.md](docs/api-errors.md).

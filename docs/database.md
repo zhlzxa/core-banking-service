@@ -13,6 +13,8 @@ erDiagram
     accounts ||--o{ transactions : "from / to"
     accounts ||--o{ ledger_entries : "posted to"
     transactions ||--|{ ledger_entries : "balanced by"
+    users ||--o{ audit_events : "acted"
+    transactions ||--o{ audit_events : "audited by"
 
     users {
         bigint id PK
@@ -38,6 +40,18 @@ erDiagram
         numeric amount "positive"
         char3 currency
     }
+    audit_events {
+        bigint id PK
+        uuid event_id UK
+        timestamptz occurred_at
+        bigint actor_user_id FK "null if unauthenticated"
+        varchar action
+        varchar outcome "SUCCESS, REJECTED, FAILED"
+        varchar reason_code "required unless SUCCESS"
+        bigint transaction_id FK "null for rejected attempts"
+        varchar correlation_id
+        jsonb metadata
+    }
     ledger_entries {
         bigint id PK
         bigint transaction_id FK
@@ -60,6 +74,9 @@ erDiagram
 | An external identity maps to exactly one user | `uq_users_external_identity` |
 | Roles and statuses come from a closed set | `ck_users_role`, `ck_users_status` |
 | The ledger is append-only | trigger `trg_ledger_entries_append_only` rejects `UPDATE` and `DELETE` |
+| The audit trail is append-only | trigger `trg_audit_events_append_only` rejects `UPDATE` and `DELETE` |
+| Every non-successful audit event has a reason | `ck_audit_events_reason` |
+| Audited users and transactions cannot be deleted | foreign keys without `ON DELETE` actions |
 
 Every completed transaction has ledger legs whose debits equal its credits.
 This is guaranteed by the service writing both legs in the same database
@@ -77,3 +94,4 @@ units.
 |---|---|
 | V1 | Core ledger: accounts, transactions, ledger entries |
 | V2 | Users identified by external (issuer, subject); account ownership; transaction initiator |
+| V3 | Append-only business audit trail |
