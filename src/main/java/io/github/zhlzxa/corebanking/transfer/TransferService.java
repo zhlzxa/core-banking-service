@@ -6,10 +6,8 @@ import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
-import io.github.zhlzxa.corebanking.audit.AuditOutcome;
-import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
-import io.github.zhlzxa.corebanking.common.error.BusinessException;
-import io.github.zhlzxa.corebanking.common.error.ErrorCode;
+import io.github.zhlzxa.corebanking.audit.BestEffortAuditRecorder;
+import io.github.zhlzxa.corebanking.audit.MovementKind;
 import io.github.zhlzxa.corebanking.common.money.CurrencyUnits;
 import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.posting.AccountLocks;
@@ -61,7 +59,7 @@ public class TransferService {
     private final BusinessCalendar businessCalendar;
     private final AuditEventRepository auditEventRepository;
     private final AuditEventFactory auditEventFactory;
-    private final IndependentAuditRecorder independentAuditRecorder;
+    private final BestEffortAuditRecorder bestEffortAuditRecorder;
 
     public TransferService(
             AccountLocks accountLocks,
@@ -71,7 +69,7 @@ public class TransferService {
             BusinessCalendar businessCalendar,
             AuditEventRepository auditEventRepository,
             AuditEventFactory auditEventFactory,
-            IndependentAuditRecorder independentAuditRecorder) {
+            BestEffortAuditRecorder bestEffortAuditRecorder) {
         this.accountLocks = accountLocks;
         this.idempotentTransactions = idempotentTransactions;
         this.ledgerPoster = ledgerPoster;
@@ -79,7 +77,7 @@ public class TransferService {
         this.businessCalendar = businessCalendar;
         this.auditEventRepository = auditEventRepository;
         this.auditEventFactory = auditEventFactory;
-        this.independentAuditRecorder = independentAuditRecorder;
+        this.bestEffortAuditRecorder = bestEffortAuditRecorder;
     }
 
     /**
@@ -157,7 +155,8 @@ public class TransferService {
 
         BankTransaction completed =
                 ledgerPoster.post(transactionId, source.id(), destination.id(), command.amount(), command.currency());
-        auditEventRepository.append(auditEventFactory.transferCompleted(audit, command.requestId(), transactionId));
+        auditEventRepository.append(auditEventFactory.movementCompleted(
+                audit, MovementKind.TRANSFER, command.requestId(), transactionId, command.customerId()));
         log.info("Transfer completed: transactionId={}", transactionId);
         return completed;
     }
@@ -183,26 +182,12 @@ public class TransferService {
      * not turn a business rejection into a technical error.
      */
     private void recordUnsuccessfulAttempt(AuditContext audit, TransferCommand command, RuntimeException cause) {
-        AuditOutcome outcome;
-        String reasonCode;
-        if (cause instanceof BusinessException business) {
-            outcome = AuditOutcome.REJECTED;
-            reasonCode = business.errorCode().name();
-        } else {
-            outcome = AuditOutcome.FAILED;
-            reasonCode = ErrorCode.INTERNAL_ERROR.name();
-        }
         Map<String, Object> instruction = Map.of(
                 "fromAccountId", command.fromAccountId(),
                 "toAccountId", command.toAccountId(),
                 "amount", command.amount() == null ? "" : command.amount().toPlainString(),
                 "currency", String.valueOf(command.currency()));
-        try {
-            independentAuditRecorder.record(auditEventFactory.transferUnsuccessful(
-                    audit, command.requestId(), outcome, reasonCode, instruction));
-        } catch (RuntimeException auditFailure) {
-            log.error(
-                    "Failed to record audit event for unsuccessful transfer: reasonCode={}", reasonCode, auditFailure);
-        }
+        bestEffortAuditRecorder.record(auditEventFactory.movementUnsuccessful(
+                audit, MovementKind.TRANSFER, command.requestId(), cause, instruction, command.customerId()));
     }
 }

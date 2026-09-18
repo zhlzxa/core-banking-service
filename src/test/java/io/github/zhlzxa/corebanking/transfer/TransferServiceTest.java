@@ -24,6 +24,7 @@ import io.github.zhlzxa.corebanking.audit.AuditEvent;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.audit.AuditOutcome;
+import io.github.zhlzxa.corebanking.audit.BestEffortAuditRecorder;
 import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
@@ -76,6 +77,8 @@ class TransferServiceTest {
     @Mock
     private IndependentAuditRecorder independentAuditRecorder;
 
+    private BestEffortAuditRecorder bestEffortAuditRecorder;
+
     @Mock
     private DailyTransferUsageRepository dailyTransferUsageRepository;
 
@@ -95,6 +98,7 @@ class TransferServiceTest {
      */
     @BeforeEach
     void createService() {
+        bestEffortAuditRecorder = new BestEffortAuditRecorder(independentAuditRecorder);
         transferService = new TransferService(
                 new AccountLocks(accountRepository),
                 new IdempotentTransactions(transactionRepository),
@@ -103,7 +107,7 @@ class TransferServiceTest {
                 businessCalendar,
                 auditEventRepository,
                 auditEventFactory,
-                independentAuditRecorder);
+                bestEffortAuditRecorder);
     }
 
     @Test

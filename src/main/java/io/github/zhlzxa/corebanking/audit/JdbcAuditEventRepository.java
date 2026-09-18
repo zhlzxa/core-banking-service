@@ -21,11 +21,11 @@ class JdbcAuditEventRepository implements AuditEventRepository {
         jdbc.sql("""
                         INSERT INTO audit_events
                             (event_id, occurred_at, actor_user_id, actor_issuer, actor_subject, actor_role,
-                             action, resource_type, resource_id, transaction_id, request_id, correlation_id,
+                             actor_terminal_id, actor_branch_code, on_behalf_of_user_id, action, resource_type, resource_id, transaction_id, request_id, correlation_id,
                              channel, outcome, reason_code, metadata)
                         VALUES
                             (:eventId, :occurredAt, :actorUserId, :actorIssuer, :actorSubject, :actorRole,
-                             :action, :resourceType, :resourceId, :transactionId, :requestId, :correlationId,
+                             :actorTerminalId, :actorBranchCode, :onBehalfOf, :action, :resourceType, :resourceId, :transactionId, :requestId, :correlationId,
                              :channel, :outcome, :reasonCode, CAST(:metadata AS JSONB))
                         """)
                 .param("eventId", event.eventId())
@@ -34,6 +34,9 @@ class JdbcAuditEventRepository implements AuditEventRepository {
                 .param("actorIssuer", event.actor().issuer())
                 .param("actorSubject", event.actor().subject())
                 .param("actorRole", event.actor().role())
+                .param("actorTerminalId", event.actor().terminalId())
+                .param("actorBranchCode", event.actor().branchCode())
+                .param("onBehalfOf", event.onBehalfOfUserId())
                 .param("action", event.action().name())
                 .param("resourceType", event.resourceType())
                 .param("resourceId", event.resourceId())

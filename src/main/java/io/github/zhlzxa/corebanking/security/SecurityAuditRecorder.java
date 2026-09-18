@@ -5,12 +5,10 @@ import io.github.zhlzxa.corebanking.audit.AuditActor;
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
-import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
+import io.github.zhlzxa.corebanking.audit.BestEffortAuditRecorder;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.web.CorrelationId;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -25,15 +23,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class SecurityAuditRecorder {
 
-    private static final Logger log = LoggerFactory.getLogger(SecurityAuditRecorder.class);
-
     private final AuditEventFactory auditEventFactory;
-    private final IndependentAuditRecorder independentAuditRecorder;
+    private final BestEffortAuditRecorder bestEffortAuditRecorder;
 
-    public SecurityAuditRecorder(
-            AuditEventFactory auditEventFactory, IndependentAuditRecorder independentAuditRecorder) {
+    public SecurityAuditRecorder(AuditEventFactory auditEventFactory, BestEffortAuditRecorder bestEffortAuditRecorder) {
         this.auditEventFactory = auditEventFactory;
-        this.independentAuditRecorder = independentAuditRecorder;
+        this.bestEffortAuditRecorder = bestEffortAuditRecorder;
     }
 
     /** The request carried no usable credentials. The caller is unknown. */
@@ -52,11 +47,7 @@ public class SecurityAuditRecorder {
 
     private void record(AuditActor actor, AuditAction action, HttpServletRequest request, ErrorCode reason) {
         AuditContext context = new AuditContext(actor, CorrelationId.current().orElse(null), AuditChannel.API);
-        try {
-            independentAuditRecorder.record(
-                    auditEventFactory.securityRejected(context, action, request.getRequestURI(), reason.name()));
-        } catch (RuntimeException ex) {
-            log.error("Failed to record security audit event: action={}", action, ex);
-        }
+        bestEffortAuditRecorder.record(
+                auditEventFactory.securityRejected(context, action, request.getRequestURI(), reason.name()));
     }
 }

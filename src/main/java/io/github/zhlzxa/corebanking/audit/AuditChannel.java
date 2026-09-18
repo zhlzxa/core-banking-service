@@ -6,5 +6,9 @@ package io.github.zhlzxa.corebanking.audit;
  */
 public enum AuditChannel {
     /** Public API used by customer-facing applications. */
-    API
+    API,
+    /** A teller at a branch. */
+    BRANCH,
+    /** An automated teller machine. */
+    ATM
 }
