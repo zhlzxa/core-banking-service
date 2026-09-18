@@ -39,9 +39,11 @@ ALTER TABLE transactions
     ADD CONSTRAINT ck_transactions_external_status CHECK (
         external_status IS NULL
         OR external_status IN ('NOT_SENT', 'SENT', 'ACCEPTED', 'REJECTED', 'UNKNOWN')),
-    -- An external payment always carries its end-to-end id and destination.
+    -- An external payment always carries its end-to-end id and destination, except
+    -- in the PENDING state that exists only inside the transaction creating it.
     ADD CONSTRAINT ck_transactions_fps_fields CHECK (
         transaction_type <> 'FPS_PAYMENT'
+        OR status = 'PENDING'
         OR (end_to_end_id IS NOT NULL AND external_status IS NOT NULL
             AND creditor_bank_code IS NOT NULL AND creditor_account IS NOT NULL));
 
@@ -53,6 +55,11 @@ CREATE INDEX idx_transactions_reconciliation ON transactions (next_attempt_at)
 ALTER TABLE audit_events DROP CONSTRAINT ck_audit_events_channel;
 ALTER TABLE audit_events ADD CONSTRAINT ck_audit_events_channel
     CHECK (channel IN ('API', 'BRANCH', 'ATM', 'SYSTEM'));
+
+-- A reversed payment gives its share of the daily limit back, which can bring
+-- the day's usage to exactly zero.
+ALTER TABLE daily_transfer_usage DROP CONSTRAINT ck_daily_transfer_usage_positive;
+ALTER TABLE daily_transfer_usage ADD CONSTRAINT ck_daily_transfer_usage_non_negative CHECK (used_amount >= 0);
 
 INSERT INTO accounts (account_type, code, currency, balance)
 VALUES ('INTERNAL', 'FPS-CLEARING-HKD', 'HKD', 0),

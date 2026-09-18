@@ -1,6 +1,7 @@
 package io.github.zhlzxa.corebanking.common.time;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,5 +34,10 @@ public class BusinessCalendar {
 
     public LocalDate today() {
         return LocalDate.now(clock.withZone(zone));
+    }
+
+    /** The business day an instant belongs to. */
+    public LocalDate dayOf(Instant instant) {
+        return LocalDate.ofInstant(instant, zone);
     }
 }

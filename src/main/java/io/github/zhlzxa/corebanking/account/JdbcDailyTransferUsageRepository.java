@@ -41,4 +41,17 @@ class JdbcDailyTransferUsageRepository implements DailyTransferUsageRepository {
                 .optional()
                 .isPresent();
     }
+
+    @Override
+    public void release(long accountId, LocalDate businessDay, BigDecimal amount) {
+        jdbc.sql("""
+                        UPDATE daily_transfer_usage
+                        SET used_amount = GREATEST(used_amount - :amount, 0), updated_at = now()
+                        WHERE account_id = :accountId AND usage_date = :businessDay
+                        """)
+                .param("accountId", accountId)
+                .param("businessDay", businessDay)
+                .param("amount", amount)
+                .update();
+    }
 }
