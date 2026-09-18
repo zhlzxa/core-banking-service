@@ -78,36 +78,54 @@ class OutboxKafkaIT extends AbstractIntegrationIT {
                 .exchange();
 
         assertThat(outboxPublisher.publishDueEvents()).isEqualTo(1);
+        long transactionId = jdbc.sql("SELECT id FROM transactions WHERE request_id = 'req-kafka'")
+                .query(Long.class)
+                .single();
 
         await().atMost(Duration.ofSeconds(30))
-                .untilAsserted(() -> assertThat(jdbc.sql(
-                                        "SELECT string_agg(kind || ':' || account_id, ',' ORDER BY kind) FROM account_notifications")
-                                .query(String.class)
-                                .single())
-                        .isEqualTo("MONEY_IN:200,MONEY_OUT:100"));
+                .untilAsserted(
+                        () -> assertThat(notificationsOf(transactionId)).isEqualTo("MONEY_IN:200,MONEY_OUT:100"));
     }
 
     @Test
     void aRedeliveredEventIsHandledOnlyOnce() {
-        Long transactionId = jdbc.sql("""
+        // An explicit id that no transfer in this class can have: identities restart with every
+        // test, and an event left on the topic by an earlier test must not be counted here.
+        long transactionId = 900;
+        jdbc.sql("""
                         INSERT INTO transactions
-                            (request_id, transaction_type, status, from_account_id, to_account_id, amount, currency)
-                        VALUES ('seeded', 'TRANSFER', 'COMPLETED', 100, 200, 5, 'HKD')
-                        RETURNING id
-                        """).query(Long.class).single();
+                            (id, request_id, transaction_type, status, from_account_id, to_account_id, amount, currency)
+                        VALUES (:id, 'seeded', 'TRANSFER', 'COMPLETED', 100, 200, 5, 'HKD')
+                        """).param("id", transactionId).update();
         UUID eventId = UUID.randomUUID();
         String payload = """
                 {"transactionId": %d, "fromAccountId": 100, "toAccountId": 200}
                 """.formatted(transactionId);
 
-        eventPublisher.publish(eventId, "TransactionCompleted", transactionId.toString(), payload);
-        eventPublisher.publish(eventId, "TransactionCompleted", transactionId.toString(), payload);
+        eventPublisher.publish(eventId, "TransactionCompleted", String.valueOf(transactionId), payload);
+        eventPublisher.publish(eventId, "TransactionCompleted", String.valueOf(transactionId), payload);
 
         await().atMost(Duration.ofSeconds(30))
-                .untilAsserted(() -> assertThat(data.count("processed_events")).isEqualTo(1));
+                .untilAsserted(() -> assertThat(data.count("processed_events WHERE event_id = '" + eventId + "'"))
+                        .isEqualTo(1));
         await().during(Duration.ofSeconds(2))
                 .atMost(Duration.ofSeconds(10))
                 .untilAsserted(
-                        () -> assertThat(data.count("account_notifications")).isEqualTo(2));
+                        () -> assertThat(notificationsOf(transactionId)).isEqualTo("MONEY_IN:200,MONEY_OUT:100"));
+    }
+
+    /**
+     * The notifications recorded for one transaction, for example {@code MONEY_IN:200,MONEY_OUT:100};
+     * empty while the consumer has not handled the event yet.
+     */
+    private String notificationsOf(long transactionId) {
+        return jdbc.sql("""
+                        SELECT coalesce(string_agg(kind || ':' || account_id, ',' ORDER BY kind), '')
+                        FROM account_notifications
+                        WHERE transaction_id = :transactionId
+                        """)
+                .param("transactionId", transactionId)
+                .query(String.class)
+                .single();
     }
 }
