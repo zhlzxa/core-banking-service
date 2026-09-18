@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Structured JSON logging with the correlation id on every event.
+- Separate liveness and readiness probes; readiness depends on the database
+  only.
+- Prometheus metrics: business outcomes from the audit trail, FPS call
+  latency and outcome, unresolved and escalated FPS payments, outbox backlog.
+- Build information on the info endpoint.
+- Operations runbook with alerts and procedures.
+
+### Changed
+
+- Probes, info and metrics are served on a separate management port (8081).
+
 ## [0.11.0] - 2026-09-18
 
 ### Added

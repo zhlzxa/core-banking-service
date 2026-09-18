@@ -26,6 +26,10 @@ export OIDC_ISSUER_URI=https://idp.example.com/realms/bank OIDC_AUDIENCE=core-ba
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
+The API listens on port 8080. Probes and metrics are on the management port
+8081: `/actuator/health/liveness`, `/actuator/health/readiness` and
+`/actuator/prometheus`.
+
 ## What it guarantees
 
 - **Atomicity.** A transfer debits, credits, writes both ledger legs and
@@ -74,6 +78,11 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   purpose-built indexes, so every page costs the same regardless of depth and
   pages stay stable while new transactions arrive. See
   [ADR-0005](docs/adr/0005-keyset-pagination-for-transaction-history.md).
+- **Operable.** JSON logs carry the request's correlation id and never
+  tokens or account numbers. Liveness and readiness are separate probes.
+  Prometheus metrics cover business outcomes, FPS latency and the backlogs
+  that need attention, with alerts and procedures in the
+  [runbook](docs/runbook.md).
 - **Safe error contract.** Every error is an RFC 9457 problem response with a
   stable `code` and the request's correlation id; internal details never leak
   to clients. See [docs/api-errors.md](docs/api-errors.md).
@@ -174,6 +183,7 @@ binary floating point.
 |---|---|
 | [docs/database.md](docs/database.md) | Schema, database-enforced invariants, migrations |
 | [docs/api-errors.md](docs/api-errors.md) | Error response format, error codes and retry guidance |
+| [docs/runbook.md](docs/runbook.md) | Probes, logs, metrics, alerts and operational procedures |
 | [docs/adr](docs/adr/README.md) | Architecture decision records |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commit convention, coding standards |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and secret-handling rules |
