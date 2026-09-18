@@ -43,8 +43,9 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   from an external OpenID Connect provider. Every transfer checks the token
   scope, the caller's bank role and ownership of the source account. See
   [ADR-0003](docs/adr/0003-delegate-authentication-to-an-oidc-provider.md).
-- **Safe error contract.** Errors are RFC 9457 problem responses with a
-  stable `code`; internal details never leak to clients.
+- **Safe error contract.** Every error is an RFC 9457 problem response with a
+  stable `code` and the request's correlation id; internal details never leak
+  to clients. See [docs/api-errors.md](docs/api-errors.md).
 
 These properties are verified by integration tests against a real PostgreSQL
 instance, including concurrent scenarios and injected failures.
@@ -106,6 +107,7 @@ binary floating point.
 | Document | Purpose |
 |---|---|
 | [docs/database.md](docs/database.md) | Schema, database-enforced invariants, migrations |
+| [docs/api-errors.md](docs/api-errors.md) | Error response format, error codes and retry guidance |
 | [docs/adr](docs/adr/README.md) | Architecture decision records |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commit convention, coding standards |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and secret-handling rules |
