@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.account;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /** Persistence operations on accounts. All mutating methods require an active transaction. */
 public interface AccountRepository {
@@ -43,4 +44,18 @@ public interface AccountRepository {
      *     account does not exist
      */
     void credit(long accountId, BigDecimal amount);
+
+    /**
+     * @throws org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException if the
+     *     account does not exist
+     */
+    void updateStatus(long accountId, AccountStatus status, @Nullable StatusReason reason);
+
+    /**
+     * Replaces both transfer limits; {@code null} removes a limit.
+     *
+     * @throws org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException if the
+     *     account does not exist
+     */
+    void updateLimits(long accountId, @Nullable BigDecimal perTransactionLimit, @Nullable BigDecimal dailyLimit);
 }

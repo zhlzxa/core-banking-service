@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
+import io.github.zhlzxa.corebanking.account.AccountStatus;
 import io.github.zhlzxa.corebanking.audit.AuditAction;
 import io.github.zhlzxa.corebanking.audit.AuditActor;
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
@@ -218,7 +219,8 @@ class TransferServiceTest {
     void bankInternalAccountIsNotAValidDestination() {
         givenAccount(1, "HKD", "1000.00");
         when(accountRepository.findByIdForUpdate(2))
-                .thenReturn(Optional.of(new Account(2, null, "HKD", BigDecimal.ZERO)));
+                .thenReturn(Optional.of(
+                        new Account(2, null, "HKD", BigDecimal.ZERO, AccountStatus.ACTIVE, null, null, null)));
 
         assertThatThrownBy(() -> transferService.transfer(AUDIT, command(1, 2, "100.00")))
                 .isInstanceOf(AccountNotFoundException.class);
@@ -268,7 +270,8 @@ class TransferServiceTest {
 
     private void givenAccount(long id, String currency, String balance) {
         when(accountRepository.findByIdForUpdate(id))
-                .thenReturn(Optional.of(new Account(id, ownerOf(id), currency, new BigDecimal(balance))));
+                .thenReturn(Optional.of(new Account(
+                        id, ownerOf(id), currency, new BigDecimal(balance), AccountStatus.ACTIVE, null, null, null)));
     }
 
     private static TransferCommand command(long from, long to, String amount) {

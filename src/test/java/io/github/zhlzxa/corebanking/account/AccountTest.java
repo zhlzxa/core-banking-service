@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 
 class AccountTest {
 
-    private final Account account = new Account(1, 7L, "HKD", new BigDecimal("100.00"));
+    private final Account account = new Account(
+            1, 7L, "HKD", new BigDecimal("100.00"), AccountStatus.ACTIVE, null, new BigDecimal("50.00"), null);
 
     @Test
     void balanceIsSufficientUpToAndIncludingTheExactAmount() {
@@ -24,8 +25,14 @@ class AccountTest {
     }
 
     @Test
+    void perTransactionLimitIsInclusive() {
+        assertThat(account.exceedsPerTransactionLimit(new BigDecimal("50.00"))).isFalse();
+        assertThat(account.exceedsPerTransactionLimit(new BigDecimal("50.01"))).isTrue();
+    }
+
+    @Test
     void internalAccountsHaveNoOwner() {
-        Account internal = new Account(2, null, "HKD", BigDecimal.ZERO);
+        Account internal = new Account(2, null, "HKD", BigDecimal.ZERO, AccountStatus.ACTIVE, null, null, null);
 
         assertThat(internal.isCustomerAccount()).isFalse();
         assertThat(internal.isOwnedBy(7)).isFalse();
