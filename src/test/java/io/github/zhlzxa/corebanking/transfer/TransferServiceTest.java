@@ -24,6 +24,7 @@ import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.audit.AuditOutcome;
 import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
@@ -180,6 +181,63 @@ class TransferServiceTest {
     }
 
     @Test
+    void frozenSourceCannotSend() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00", AccountStatus.FROZEN, null);
+        givenAccount(2, "HKD", "0.00");
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.SOURCE_ACCOUNT_NOT_ACTIVE);
+    }
+
+    @Test
+    void frozenDestinationCanStillReceive() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00", AccountStatus.FROZEN, null);
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(stored(TransactionStatus.COMPLETED)));
+
+        transferService.transfer(AUDIT, command(1, 2, "100.00"));
+
+        verify(accountRepository).credit(2, AMOUNT);
+    }
+
+    @Test
+    void closedDestinationCannotReceive() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00");
+        givenAccount(2, "HKD", "0.00", AccountStatus.CLOSED, null);
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.DESTINATION_ACCOUNT_CLOSED);
+    }
+
+    @Test
+    void amountAbovePerTransactionLimitIsRejected() {
+        givenClaimedRequest();
+        givenAccount(1, "HKD", "1000.00", AccountStatus.ACTIVE, new BigDecimal("99.99"));
+        givenAccount(2, "HKD", "0.00");
+
+        assertRuleViolation(command(1, 2, "100.00"), ErrorCode.TRANSFER_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void amountWithMorePrecisionThanTheCurrencyIsRejectedBeforeAnyLock() {
+        TransferCommand tooPrecise = new TransferCommand(ownerOf(1), "req-1", 1, 2, new BigDecimal("10.005"), "HKD");
+
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, tooPrecise))
+                .isInstanceOfSatisfying(
+                        AccountRuleViolationException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.INVALID_AMOUNT_SCALE));
+        verifyNoInteractions(accountRepository, transactionRepository);
+    }
+
+    @Test
+    void unknownCurrencyIsAnInvalidTransfer() {
+        TransferCommand unknown = new TransferCommand(ownerOf(1), "req-1", 1, 2, BigDecimal.TEN, "XYZ");
+
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, unknown)).isInstanceOf(InvalidTransferException.class);
+    }
+
+    @Test
     void currencyMismatchIsRejected() {
         givenClaimedRequest();
         givenAccount(1, "HKD", "1000.00");
@@ -266,6 +324,21 @@ class TransferServiceTest {
 
     private void givenClaimedRequest() {
         when(transactionRepository.insertPendingIfAbsent(any())).thenReturn(Optional.of(TX_ID));
+    }
+
+    private void givenAccount(long id, String currency, String balance, AccountStatus status, BigDecimal limit) {
+        when(accountRepository.findByIdForUpdate(id))
+                .thenReturn(Optional.of(
+                        new Account(id, ownerOf(id), currency, new BigDecimal(balance), status, null, limit, null)));
+    }
+
+    private void assertRuleViolation(TransferCommand command, ErrorCode expected) {
+        assertThatThrownBy(() -> transferService.transfer(AUDIT, command))
+                .isInstanceOfSatisfying(
+                        AccountRuleViolationException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(expected));
+        verify(accountRepository, never()).debit(anyLong(), any());
+        verifyNoInteractions(ledgerRepository);
     }
 
     private void givenAccount(long id, String currency, String balance) {

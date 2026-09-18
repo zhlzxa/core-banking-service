@@ -74,6 +74,23 @@ public class TestDataFactory {
                 .single();
     }
 
+    public void setStatus(long accountId, String status, String reason) {
+        jdbc.sql("UPDATE accounts SET status = :status, status_reason = :reason WHERE id = :id")
+                .param("id", accountId)
+                .param("status", status)
+                .param("reason", reason)
+                .update();
+    }
+
+    public void setLimits(long accountId, String perTransaction, String daily) {
+        jdbc.sql(
+                        "UPDATE accounts SET per_transaction_limit = :perTransaction, daily_transfer_limit = :daily WHERE id = :id")
+                .param("id", accountId)
+                .param("perTransaction", perTransaction == null ? null : new BigDecimal(perTransaction))
+                .param("daily", daily == null ? null : new BigDecimal(daily))
+                .update();
+    }
+
     public BigDecimal balanceOf(long accountId) {
         return jdbc.sql("SELECT balance FROM accounts WHERE id = :id")
                 .param("id", accountId)
