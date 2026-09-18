@@ -87,6 +87,16 @@ management:
         http.server.requests: true
         corebanking.fps.calls: true
 
+# The API description and Swagger UI are off unless a profile enables them:
+# production does not advertise its surface to anyone who can reach it.
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+  default-produces-media-type: application/json
+  paths-to-exclude: /error
+
 # The API is an OAuth2 resource server. Tokens are issued by an external
 # OpenID Connect provider; the service never handles passwords.
 corebanking:

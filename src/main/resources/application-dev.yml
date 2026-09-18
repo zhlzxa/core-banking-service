@@ -6,6 +6,12 @@ spring:
     username: ${DB_USERNAME:corebanking}
     password: ${DB_PASSWORD:local-dev-only}
 
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 logging:
   # Human-readable logs on a developer's console.
   structured:
