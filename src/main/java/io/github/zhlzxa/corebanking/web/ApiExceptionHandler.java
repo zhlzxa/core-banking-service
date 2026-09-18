@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSourceResolvable;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -51,6 +52,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
     void propagateSecurityException(Exception ex) throws Exception {
         throw ex;
+    }
+
+    /**
+     * Two requests updated the same versioned record concurrently and this one lost. The client
+     * should reload the record and decide whether to reapply its change.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(OptimisticLockingFailureException ex) {
+        return respond(ProblemDetails.of(
+                ErrorCode.CONCURRENT_MODIFICATION, "The resource was modified by another request; reload and retry"));
     }
 
     /** Last resort: the cause is logged with the correlation id, the client only learns that it failed. */

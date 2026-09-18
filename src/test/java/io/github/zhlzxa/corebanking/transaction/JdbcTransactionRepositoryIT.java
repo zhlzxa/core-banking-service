@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 class JdbcTransactionRepositoryIT extends AbstractIntegrationIT {
@@ -60,7 +61,7 @@ class JdbcTransactionRepositoryIT extends AbstractIntegrationIT {
     @Test
     void updatingUnknownTransactionFails() {
         assertThatThrownBy(() -> transactionRepository.updateStatus(999, TransactionStatus.COMPLETED))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
     }
 
     @Test

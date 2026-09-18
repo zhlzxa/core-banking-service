@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-18
+
+### Added
+
+- Saved payees: `GET`, `POST`, `PATCH` and `DELETE` on `/payees`, scoped to
+  the caller, with masked account numbers and audited changes.
+- Optimistic concurrency for payee renames; stale versions and concurrent
+  updates are reported as `CONCURRENT_MODIFICATION`.
+- Scopes `bank.payees.read` and `bank.payees.write`.
+- ADR-0006 on explicit SQL for the ledger and JPA for reference data.
+
+### Changed
+
+- Repositories report unexpected update counts with
+  `JdbcUpdateAffectedIncorrectNumberOfRowsException`.
+
 ## [0.6.0] - 2026-09-18
 
 ### Added
@@ -109,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.3.0...v0.4.0

@@ -30,7 +30,8 @@ public interface AccountRepository {
     /**
      * Decreases the balance.
      *
-     * @throws IllegalStateException if the account does not exist or the balance would become
+     * @throws org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException if the
+     *     account does not exist or the balance would become
      *     negative; callers are expected to have checked both under a row lock
      */
     void debit(long accountId, BigDecimal amount);
@@ -38,7 +39,8 @@ public interface AccountRepository {
     /**
      * Increases the balance.
      *
-     * @throws IllegalStateException if the account does not exist
+     * @throws org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException if the
+     *     account does not exist
      */
     void credit(long accountId, BigDecimal amount);
 }

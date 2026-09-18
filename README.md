@@ -7,7 +7,7 @@ genuinely hard to get right: atomic money movement on a double-entry
 ledger, idempotent payment APIs, concurrency control and an auditable
 record of every business action.
 
-**Stack:** Java 21 · Spring Boot 4 · PostgreSQL 17 · Flyway · Testcontainers · Docker
+**Stack:** Java 21 · Spring Boot 4 · PostgreSQL 17 · JDBC and JPA · Flyway · Testcontainers · Docker
 
 > **Status:** under active development. See [CHANGELOG.md](CHANGELOG.md)
 > for what has been delivered so far.
@@ -68,6 +68,10 @@ instance, including concurrent scenarios and injected failures.
 | `GET /accounts` | `bank.accounts.read` | The caller's accounts and balances |
 | `GET /accounts/{id}` | `bank.accounts.read` | One of the caller's accounts |
 | `GET /accounts/{id}/transactions?size=&cursor=` | `bank.accounts.read` | History, newest first, cursor-paginated |
+| `GET /payees` | `bank.payees.read` | The caller's saved payees |
+| `POST /payees` | `bank.payees.write` | Save a payee |
+| `PATCH /payees/{id}` | `bank.payees.write` | Rename a payee; requires the last-read `version` |
+| `DELETE /payees/{id}` | `bank.payees.write` | Remove a payee |
 
 All endpoints require the bank role `CUSTOMER`.
 

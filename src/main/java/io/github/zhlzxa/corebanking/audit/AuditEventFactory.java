@@ -15,6 +15,7 @@ public class AuditEventFactory {
     static final String TRANSFER = "TRANSFER";
     static final String TRANSFER_REQUEST = "TRANSFER_REQUEST";
     static final String HTTP_ENDPOINT = "HTTP_ENDPOINT";
+    static final String PAYEE = "PAYEE";
 
     private final Clock clock;
 
@@ -67,6 +68,27 @@ public class AuditEventFactory {
                 outcome,
                 reasonCode,
                 instruction);
+    }
+
+    /**
+     * A saved payee was added, renamed or removed. The account number is not recorded; the payee id
+     * identifies the record, whose history is kept in this trail.
+     */
+    public AuditEvent payeeChanged(AuditContext context, AuditAction action, long payeeId) {
+        return new AuditEvent(
+                UUID.randomUUID(),
+                clock.instant(),
+                context.actor(),
+                action,
+                PAYEE,
+                Long.toString(payeeId),
+                null,
+                null,
+                context.correlationId(),
+                context.channel(),
+                AuditOutcome.SUCCESS,
+                null,
+                Map.of());
     }
 
     /** A request was stopped by authentication or authorization before any business logic ran. */

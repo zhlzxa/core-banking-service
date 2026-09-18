@@ -14,6 +14,7 @@ erDiagram
     accounts ||--o{ ledger_entries : "posted to"
     transactions ||--|{ ledger_entries : "balanced by"
     users ||--o{ audit_events : "acted"
+    users ||--o{ payees : "saves"
     transactions ||--o{ audit_events : "audited by"
 
     users {
@@ -52,6 +53,15 @@ erDiagram
         varchar correlation_id
         jsonb metadata
     }
+    payees {
+        bigint id PK
+        bigint user_id FK
+        varchar nickname
+        varchar account_number
+        varchar bank_code "null for accounts at this bank"
+        char3 currency
+        bigint version "optimistic lock"
+    }
     ledger_entries {
         bigint id PK
         bigint transaction_id FK
@@ -77,10 +87,18 @@ erDiagram
 | The audit trail is append-only | trigger `trg_audit_events_append_only` rejects `UPDATE` and `DELETE` |
 | Every non-successful audit event has a reason | `ck_audit_events_reason` |
 | Audited users and transactions cannot be deleted | foreign keys without `ON DELETE` actions |
+| A customer saves each destination once | `uq_payees_owner_destination` (`NULLS NOT DISTINCT`) |
 
 Every completed transaction has ledger legs whose debits equal its credits.
 This is guaranteed by the service writing both legs in the same database
 transaction, and it is asserted by the integration tests.
+
+## Access technology
+
+Accounts, transactions, ledger entries and audit events are accessed through
+explicit SQL (`JdbcClient`). Payees are mapped with JPA. Each table is accessed
+through exactly one of the two. See
+[ADR-0006](adr/0006-explicit-sql-for-the-ledger-jpa-for-reference-data.md).
 
 ## Indexes and the queries they serve
 
@@ -92,6 +110,7 @@ columns automatically.
 | Index | Query |
 |---|---|
 | `idx_accounts_user_id` | List a customer's accounts |
+| `uq_payees_owner_destination` | List a customer's payees (leading `user_id`) |
 | `idx_transactions_from_created_id` | Outgoing branch of the transaction history, keyset-paginated |
 | `idx_transactions_to_created_id` | Incoming branch of the transaction history, keyset-paginated |
 | `idx_ledger_entries_account_transaction` | All postings of an account |
@@ -120,3 +139,4 @@ units.
 | V2 | Users identified by external (issuer, subject); account ownership; transaction initiator |
 | V3 | Append-only business audit trail |
 | V4 | Indexes for account and history read paths |
+| V5 | Saved payees, maintained through JPA with optimistic locking |

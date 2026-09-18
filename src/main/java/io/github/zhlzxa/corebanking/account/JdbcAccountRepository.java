@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -61,7 +62,7 @@ class JdbcAccountRepository implements AccountRepository {
                         WHERE id = :id AND balance >= :amount
                         """).param("id", accountId).param("amount", amount).update();
         if (updated != 1) {
-            throw new IllegalStateException("Debit was not applied to account " + accountId);
+            throw new JdbcUpdateAffectedIncorrectNumberOfRowsException("debit account " + accountId, 1, updated);
         }
     }
 
@@ -74,7 +75,7 @@ class JdbcAccountRepository implements AccountRepository {
                         WHERE id = :id
                         """).param("id", accountId).param("amount", amount).update();
         if (updated != 1) {
-            throw new IllegalStateException("Credit was not applied to account " + accountId);
+            throw new JdbcUpdateAffectedIncorrectNumberOfRowsException("credit account " + accountId, 1, updated);
         }
     }
 

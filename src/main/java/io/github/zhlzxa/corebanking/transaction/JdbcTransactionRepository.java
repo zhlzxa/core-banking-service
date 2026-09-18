@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -102,7 +103,8 @@ class JdbcTransactionRepository implements TransactionRepository {
                 .param("status", status.name())
                 .update();
         if (updated != 1) {
-            throw new IllegalStateException("Transaction " + transactionId + " does not exist");
+            throw new JdbcUpdateAffectedIncorrectNumberOfRowsException(
+                    "update status of transaction " + transactionId, 1, updated);
         }
     }
 

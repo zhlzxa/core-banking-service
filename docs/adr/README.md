@@ -12,6 +12,7 @@ that changes is superseded by a new record.
 | [0003](0003-delegate-authentication-to-an-oidc-provider.md) | Delegate authentication to an OIDC provider and authorise in three layers | Accepted |
 | [0004](0004-audit-success-in-transaction-and-failure-independently.md) | Audit successes inside the business transaction and failures independently | Accepted |
 | [0005](0005-keyset-pagination-for-transaction-history.md) | Paginate transaction history with a keyset cursor instead of OFFSET | Accepted |
+| [0006](0006-explicit-sql-for-the-ledger-jpa-for-reference-data.md) | Use explicit SQL for the ledger and JPA only for reference data | Accepted |
 
 ## Template
 
