@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-18
+
+### Added
+
+- Append-only `audit_events` trail with database-enforced immutability and
+  mandatory reason codes for non-successful outcomes.
+- Transfers audited along the transaction boundary: `TRANSFER_COMPLETED`
+  atomically with the money movement, `TRANSFER_REJECTED` and
+  `TRANSFER_FAILED` in an independent transaction that survives rollback.
+- Authentication failures and access denials audited with actor, endpoint and
+  correlation id.
+- ADR-0004 describing the audit transaction strategy.
+
+### Changed
+
+- A transfer fails if its success audit event cannot be written.
+- Method-level authorization denials are handled by the security layer, like
+  URL-level denials.
+
 ## [0.4.0] - 2026-09-18
 
 ### Added
@@ -74,7 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.1.0...v0.2.0
