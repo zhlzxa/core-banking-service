@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Transactional outbox: completed transfers, deposits, withdrawals, FPS
+  payments and reversals write a `TransactionCompleted` event in the same
+  database transaction.
+- Scheduled publisher that delivers outbox events to Kafka at least once,
+  with lease-based claiming, retry with back-off and retention cleanup.
+- Example consumer that records account notifications and ignores
+  redelivered events.
+- ADR-0011.
+
 ## [0.10.0] - 2026-09-18
 
 ### Added

@@ -7,7 +7,7 @@ genuinely hard to get right: atomic money movement on a double-entry
 ledger, idempotent payment APIs, concurrency control and an auditable
 record of every business action.
 
-**Stack:** Java 21 · Spring Boot 4 · PostgreSQL 17 · JDBC and JPA · Flyway · Testcontainers · Docker
+**Stack:** Java 21 · Spring Boot 4 · PostgreSQL 17 · JDBC and JPA · Flyway · Kafka · Testcontainers · Docker
 
 > **Status:** under active development. See [CHANGELOG.md](CHANGELOG.md)
 > for what has been delivered so far.
@@ -17,11 +17,11 @@ record of every business action.
 Prerequisites: JDK 21 and Docker.
 
 ```bash
-# Build and run all unit and integration tests (starts PostgreSQL in a container)
+# Build and run all unit and integration tests (starts PostgreSQL and Kafka in containers)
 ./mvnw verify
 
-# Run the service locally against the compose database and an OIDC provider
-docker compose up -d postgres
+# Run the service locally against the compose database and broker and an OIDC provider
+docker compose up -d postgres kafka
 export OIDC_ISSUER_URI=https://idp.example.com/realms/bank OIDC_AUDIENCE=core-banking-api
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
@@ -51,6 +51,11 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   or escalated for investigation. Rejections are undone with reversal
   transactions. See [ADR-0009](docs/adr/0009-treat-payment-timeouts-as-unknown-and-reconcile.md)
   and [ADR-0010](docs/adr/0010-correct-postings-with-reversal-transactions.md).
+- **Reliable events.** Every completed movement produces a
+  `TransactionCompleted` event, written to an outbox table in the same
+  transaction and published to Kafka afterwards. No event is lost and none
+  describes a movement that rolled back; consumers deduplicate by event id.
+  See [ADR-0011](docs/adr/0011-publish-events-through-a-transactional-outbox.md).
 - **Cash channels.** Tellers take in and pay out cash at a branch; large
   withdrawals need a second teller's approval (four eyes). ATMs authenticate
   as machines, not users. Every action records who acted, for which customer,

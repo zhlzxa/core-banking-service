@@ -17,6 +17,7 @@ that changes is superseded by a new record.
 | [0008](0008-attribute-staff-and-machine-actions-to-the-customer.md) | Attribute staff and machine actions to the customer they serve | Accepted |
 | [0009](0009-treat-payment-timeouts-as-unknown-and-reconcile.md) | Treat external payment timeouts as unknown and resolve them by reconciliation | Accepted |
 | [0010](0010-correct-postings-with-reversal-transactions.md) | Correct postings with reversal transactions, never by editing the ledger | Accepted |
+| [0011](0011-publish-events-through-a-transactional-outbox.md) | Publish integration events through a transactional outbox, at least once | Accepted |
 
 ## Template
 
