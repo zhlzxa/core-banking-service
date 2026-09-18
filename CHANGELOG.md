@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-18
+
+### Added
+
+- Core double-entry ledger schema (accounts, transactions, ledger entries)
+  with database-enforced invariants and an append-only ledger.
+- Atomic internal transfers with pessimistic locking in ascending account id
+  order and idempotency through a unique client request id.
+- `POST /transfers` endpoint with Bean Validation and RFC 9457 problem
+  responses carrying stable error codes.
+- Integration tests against PostgreSQL for rollback, concurrent transfers,
+  overdraft races and concurrent duplicate requests.
+- ADR-0001 (lock ordering), ADR-0002 (idempotency) and schema documentation.
+
+### Fixed
+
+- Secret scanning in CI failed on the repository's root commit.
+
 ## [0.1.0] - 2026-09-18
 
 ### Added
@@ -19,5 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/zhlzxa/core-banking-service/releases/tag/v0.1.0
