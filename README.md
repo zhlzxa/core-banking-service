@@ -48,6 +48,10 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
   atomically with the money movement; rejected attempts are audited in an
   independent transaction so they survive the rollback. See
   [ADR-0004](docs/adr/0004-audit-success-in-transaction-and-failure-independently.md).
+- **Scalable history.** Transaction history uses keyset pagination backed by
+  purpose-built indexes, so every page costs the same regardless of depth and
+  pages stay stable while new transactions arrive. See
+  [ADR-0005](docs/adr/0005-keyset-pagination-for-transaction-history.md).
 - **Safe error contract.** Every error is an RFC 9457 problem response with a
   stable `code` and the request's correlation id; internal details never leak
   to clients. See [docs/api-errors.md](docs/api-errors.md).
@@ -56,6 +60,16 @@ These properties are verified by integration tests against a real PostgreSQL
 instance, including concurrent scenarios and injected failures.
 
 ## API
+
+| Method and path | Scope | Purpose |
+|---|---|---|
+| `POST /transfers` | `bank.transfer` | Transfer between accounts; idempotent per `requestId` |
+| `GET /transfers/{id}` | `bank.accounts.read` | A transfer involving one of the caller's accounts |
+| `GET /accounts` | `bank.accounts.read` | The caller's accounts and balances |
+| `GET /accounts/{id}` | `bank.accounts.read` | One of the caller's accounts |
+| `GET /accounts/{id}/transactions?size=&cursor=` | `bank.accounts.read` | History, newest first, cursor-paginated |
+
+All endpoints require the bank role `CUSTOMER`.
 
 ### `POST /transfers`
 
@@ -78,6 +92,7 @@ Content-Type: application/json
 
 ```http
 HTTP/1.1 201 Created
+Location: /transfers/1
 Content-Type: application/json
 
 {

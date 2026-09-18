@@ -82,6 +82,30 @@ Every completed transaction has ledger legs whose debits equal its credits.
 This is guaranteed by the service writing both legs in the same database
 transaction, and it is asserted by the integration tests.
 
+## Indexes and the queries they serve
+
+Every secondary index exists for a named query. Primary keys and unique
+constraints already index `id`, `request_id`, `event_id` and
+`(identity_issuer, identity_subject)`; PostgreSQL does not index foreign key
+columns automatically.
+
+| Index | Query |
+|---|---|
+| `idx_accounts_user_id` | List a customer's accounts |
+| `idx_transactions_from_created_id` | Outgoing branch of the transaction history, keyset-paginated |
+| `idx_transactions_to_created_id` | Incoming branch of the transaction history, keyset-paginated |
+| `idx_ledger_entries_account_transaction` | All postings of an account |
+| `idx_audit_events_actor_time` | Recent actions of a user |
+| `idx_audit_events_transaction` | Audit trail of a transaction |
+| `idx_audit_events_request_id` | What happened to a client request, including rejected ones |
+| `idx_audit_events_action_time` | All events of a kind in a period, for example failed logins |
+
+Query plans are inspected with `QueryPlanInvestigationIT`, which is disabled in
+CI because plan shapes depend on data volume and statistics. With 200,000
+transactions over 200 accounts the history query executes as a Merge Append of
+two index-only scans with no sort, in about 0.1 ms. See
+[ADR-0005](adr/0005-keyset-pagination-for-transaction-history.md).
+
 ## Monetary values
 
 Amounts are `NUMERIC(19, 4)`. The API validates the per-currency number of
@@ -95,3 +119,4 @@ units.
 | V1 | Core ledger: accounts, transactions, ledger entries |
 | V2 | Users identified by external (issuer, subject); account ownership; transaction initiator |
 | V3 | Append-only business audit trail |
+| V4 | Indexes for account and history read paths |
