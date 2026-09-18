@@ -41,16 +41,51 @@ server:
     include-message: never
     include-stacktrace: never
 
+# Logs are written as one JSON object per line for the log pipeline. MDC
+# values become fields, so every event carries the correlation id of the
+# request that produced it. Logs must never contain tokens, credentials or
+# account numbers; identifiers such as transaction ids are sufficient.
 logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:logstash}
   pattern:
-    # Every log line carries the correlation id of the request that produced it.
+    # Used when structured logging is switched off, for example in the dev profile.
     correlation: "[%X{correlationId:-}] "
 
+# Probes and metrics are served on a separate port. It is reachable by the
+# orchestrator and the metrics scraper inside the cluster, and the API ingress
+# never routes to it.
 management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        # Liveness reflects only the state of the process: a database outage must
+        # not make the orchestrator restart healthy instances.
+        liveness:
+          include: livenessState
+        # Readiness requires the database, without which no request can be
+        # served. Kafka and FPS are deliberately excluded: the outbox holds events
+        # while the broker is down, and FPS outages are handled by reconciliation.
+        readiness:
+          include: readinessState,db
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # Histogram buckets let latency percentiles be aggregated across instances.
+      percentiles-histogram:
+        http.server.requests: true
+        corebanking.fps.calls: true
 
 # The API is an OAuth2 resource server. Tokens are issued by an external
 # OpenID Connect provider; the service never handles passwords.
