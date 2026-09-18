@@ -2,7 +2,7 @@
 
 # Build stage: compiles and packages the service. Tests and quality gates run
 # in CI before an image is built, so they are skipped here.
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:24-jdk AS build
 WORKDIR /workspace
 
 # Dependencies change less often than sources; resolving them first lets
@@ -17,7 +17,7 @@ RUN sh ./mvnw -B -q package -DskipTests -Dspotless.check.skip=true -Djacoco.skip
 
 # Runtime stage: JRE only, no build tools or sources, running as an
 # unprivileged user.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 RUN groupadd --system corebanking && useradd --system --gid corebanking --no-create-home corebanking
 WORKDIR /app
 
