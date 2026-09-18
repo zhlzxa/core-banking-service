@@ -3,6 +3,8 @@ package io.github.zhlzxa.corebanking.posting;
 import io.github.zhlzxa.corebanking.account.AccountRepository;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
+import io.github.zhlzxa.corebanking.outbox.IntegrationEvents;
+import io.github.zhlzxa.corebanking.outbox.OutboxRepository;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
 import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
@@ -14,7 +16,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Callers validate the business rules and hold the necessary row locks before posting; this
  * class only guarantees that both balances, both ledger legs and the status change are written
- * together within the caller's transaction.
+ * together within the caller's transaction. A completed posting also records its {@code
+ * TransactionCompleted} integration event in the outbox, in the same transaction.
  */
 @Component
 public class LedgerPoster {
@@ -22,14 +25,20 @@ public class LedgerPoster {
     private final AccountRepository accountRepository;
     private final LedgerRepository ledgerRepository;
     private final TransactionRepository transactionRepository;
+    private final OutboxRepository outboxRepository;
+    private final IntegrationEvents integrationEvents;
 
     public LedgerPoster(
             AccountRepository accountRepository,
             LedgerRepository ledgerRepository,
-            TransactionRepository transactionRepository) {
+            TransactionRepository transactionRepository,
+            OutboxRepository outboxRepository,
+            IntegrationEvents integrationEvents) {
         this.accountRepository = accountRepository;
         this.ledgerRepository = ledgerRepository;
         this.transactionRepository = transactionRepository;
+        this.outboxRepository = outboxRepository;
+        this.integrationEvents = integrationEvents;
     }
 
     /**
@@ -60,8 +69,12 @@ public class LedgerPoster {
         ledgerRepository.append(LedgerEntry.debit(transactionId, debitAccountId, amount, currency));
         ledgerRepository.append(LedgerEntry.credit(transactionId, creditAccountId, amount, currency));
         transactionRepository.updateStatus(transactionId, resultingStatus);
-        return transactionRepository
+        BankTransaction posted = transactionRepository
                 .findById(transactionId)
                 .orElseThrow(() -> new IllegalStateException("Transaction " + transactionId + " vanished"));
+        if (resultingStatus == TransactionStatus.COMPLETED) {
+            outboxRepository.append(integrationEvents.transactionCompleted(posted));
+        }
+        return posted;
     }
 }

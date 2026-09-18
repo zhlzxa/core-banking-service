@@ -12,6 +12,14 @@ spring:
       maximum-pool-size: ${DB_POOL_SIZE:10}
   flyway:
     locations: classpath:db/migration
+  # The outbox publisher waits for acknowledgement from all in-sync replicas,
+  # and the idempotent producer prevents duplicates caused by producer retries.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
   jpa:
     # The schema is owned by Flyway; Hibernate only verifies that the mappings match it.
     hibernate:
@@ -71,3 +79,18 @@ corebanking:
     reconciliation:
       enabled: true
       interval: 30s
+  # Integration events are written to the outbox in the business transaction
+  # and published to Kafka afterwards, at least once.
+  outbox:
+    topic: corebanking.transactions.v1
+    batch-size: 100
+    lease: 30s
+    retry-backoff: 1s, 5s, 30s, 2m, 10m
+    send-timeout: 5s
+    retention: 7d
+    cleanup-batch-size: 10000
+    publisher:
+      enabled: true
+      interval: 1s
+    cleanup:
+      interval: 1h

@@ -7,6 +7,8 @@ import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.fps.FpsPayment.ExternalStatus;
+import io.github.zhlzxa.corebanking.outbox.IntegrationEvents;
+import io.github.zhlzxa.corebanking.outbox.OutboxRepository;
 import io.github.zhlzxa.corebanking.posting.Reversals;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
@@ -40,6 +42,8 @@ class FpsOutcomeService {
     private final BusinessCalendar businessCalendar;
     private final AuditEventRepository auditEventRepository;
     private final AuditEventFactory auditEventFactory;
+    private final OutboxRepository outboxRepository;
+    private final IntegrationEvents integrationEvents;
     private final FpsProperties properties;
     private final Clock clock;
 
@@ -51,6 +55,8 @@ class FpsOutcomeService {
             BusinessCalendar businessCalendar,
             AuditEventRepository auditEventRepository,
             AuditEventFactory auditEventFactory,
+            OutboxRepository outboxRepository,
+            IntegrationEvents integrationEvents,
             FpsProperties properties,
             Clock clock) {
         this.paymentRepository = paymentRepository;
@@ -60,11 +66,13 @@ class FpsOutcomeService {
         this.businessCalendar = businessCalendar;
         this.auditEventRepository = auditEventRepository;
         this.auditEventFactory = auditEventFactory;
+        this.outboxRepository = outboxRepository;
+        this.integrationEvents = integrationEvents;
         this.properties = properties;
         this.clock = clock;
     }
 
-    /** FPS accepted the payment: it is final. */
+    /** FPS accepted the payment: it is final, and other systems are told so. */
     @Transactional
     public FpsPayment confirm(AuditContext audit, long paymentId) {
         FpsPayment payment = lock(paymentId);
@@ -72,6 +80,8 @@ class FpsOutcomeService {
             return payment;
         }
         paymentRepository.recordOutcome(paymentId, TransactionStatus.COMPLETED, ExternalStatus.ACCEPTED, null, null);
+        outboxRepository.append(integrationEvents.transactionCompleted(
+                transactionRepository.findById(paymentId).orElseThrow()));
         record(audit, AuditAction.FPS_PAYMENT_CONFIRMED, payment, Map.of("endToEndId", payment.endToEndId()));
         return reload(paymentId);
     }
