@@ -1,8 +1,11 @@
 package io.github.zhlzxa.corebanking.audit;
 
+import io.github.zhlzxa.corebanking.common.error.BusinessException;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,11 +15,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuditEventFactory {
 
-    static final String TRANSFER = "TRANSFER";
-    static final String TRANSFER_REQUEST = "TRANSFER_REQUEST";
+    static final String TRANSACTION = "TRANSACTION";
+    static final String MOVEMENT_REQUEST = "MOVEMENT_REQUEST";
     static final String HTTP_ENDPOINT = "HTTP_ENDPOINT";
     static final String PAYEE = "PAYEE";
     static final String ACCOUNT = "ACCOUNT";
+    static final String WITHDRAWAL_APPROVAL = "WITHDRAWAL_APPROVAL";
 
     private final Clock clock;
 
@@ -24,49 +28,56 @@ public class AuditEventFactory {
         this.clock = clock;
     }
 
-    /** A transfer took effect. The event references the transaction, which holds the instruction. */
-    public AuditEvent transferCompleted(AuditContext context, String requestId, long transactionId) {
-        return new AuditEvent(
-                UUID.randomUUID(),
-                clock.instant(),
-                context.actor(),
-                AuditAction.TRANSFER_COMPLETED,
-                TRANSFER,
+    /**
+     * A money movement took effect. The event references the transaction, which holds the
+     * instruction.
+     *
+     * @param onBehalfOfUserId the customer whose account was debited or credited
+     */
+    public AuditEvent movementCompleted(
+            AuditContext context,
+            MovementKind kind,
+            String requestId,
+            long transactionId,
+            @Nullable Long onBehalfOfUserId) {
+        return event(
+                context,
+                onBehalfOfUserId,
+                kind.completed(),
+                TRANSACTION,
                 Long.toString(transactionId),
                 transactionId,
                 requestId,
-                context.correlationId(),
-                context.channel(),
                 AuditOutcome.SUCCESS,
                 null,
                 Map.of());
     }
 
     /**
-     * A transfer attempt was rejected or failed. No transaction row survives such an attempt, so the
-     * instruction itself (accounts, amount, currency) is recorded as metadata for investigations.
+     * A money movement was rejected or failed. Business rule violations are {@code REJECTED} with
+     * their error code; anything else is {@code FAILED} with {@code INTERNAL_ERROR}. No transaction
+     * row survives such an attempt, so the instruction itself is recorded as metadata.
      */
-    public AuditEvent transferUnsuccessful(
+    public AuditEvent movementUnsuccessful(
             AuditContext context,
-            String requestId,
-            AuditOutcome outcome,
-            String reasonCode,
-            Map<String, Object> instruction) {
-        if (outcome == AuditOutcome.SUCCESS) {
-            throw new IllegalArgumentException("Use transferCompleted for successful transfers");
-        }
-        return new AuditEvent(
-                UUID.randomUUID(),
-                clock.instant(),
-                context.actor(),
-                outcome == AuditOutcome.REJECTED ? AuditAction.TRANSFER_REJECTED : AuditAction.TRANSFER_FAILED,
-                TRANSFER_REQUEST,
+            MovementKind kind,
+            @Nullable String requestId,
+            RuntimeException cause,
+            Map<String, Object> instruction,
+            @Nullable Long onBehalfOfUserId) {
+        boolean rejected = cause instanceof BusinessException;
+        String reasonCode = cause instanceof BusinessException business
+                ? business.errorCode().name()
+                : ErrorCode.INTERNAL_ERROR.name();
+        return event(
+                context,
+                onBehalfOfUserId,
+                rejected ? kind.rejected() : kind.failed(),
+                MOVEMENT_REQUEST,
                 requestId,
                 null,
                 requestId,
-                context.correlationId(),
-                context.channel(),
-                outcome,
+                rejected ? AuditOutcome.REJECTED : AuditOutcome.FAILED,
                 reasonCode,
                 instruction);
     }
@@ -76,17 +87,14 @@ public class AuditEventFactory {
      * identifies the record, whose history is kept in this trail.
      */
     public AuditEvent payeeChanged(AuditContext context, AuditAction action, long payeeId) {
-        return new AuditEvent(
-                UUID.randomUUID(),
-                clock.instant(),
-                context.actor(),
+        return event(
+                context,
+                context.actor().userId(),
                 action,
                 PAYEE,
                 Long.toString(payeeId),
                 null,
                 null,
-                context.correlationId(),
-                context.channel(),
                 AuditOutcome.SUCCESS,
                 null,
                 Map.of());
@@ -99,17 +107,39 @@ public class AuditEventFactory {
      */
     public AuditEvent accountChanged(
             AuditContext context, AuditAction action, long accountId, Map<String, Object> details) {
-        return new AuditEvent(
-                UUID.randomUUID(),
-                clock.instant(),
-                context.actor(),
+        return event(
+                context,
+                null,
                 action,
                 ACCOUNT,
                 Long.toString(accountId),
                 null,
                 null,
-                context.correlationId(),
-                context.channel(),
+                AuditOutcome.SUCCESS,
+                null,
+                details);
+    }
+
+    /**
+     * A step in the four-eyes approval of a withdrawal: requested by the maker, granted or declined by
+     * the checker, or expired.
+     *
+     * @param onBehalfOfUserId the customer whose account the withdrawal is for
+     */
+    public AuditEvent approvalChanged(
+            AuditContext context,
+            AuditAction action,
+            long approvalId,
+            @Nullable Long onBehalfOfUserId,
+            Map<String, Object> details) {
+        return event(
+                context,
+                onBehalfOfUserId,
+                action,
+                WITHDRAWAL_APPROVAL,
+                Long.toString(approvalId),
+                null,
+                null,
                 AuditOutcome.SUCCESS,
                 null,
                 details);
@@ -117,19 +147,35 @@ public class AuditEventFactory {
 
     /** A request was stopped by authentication or authorization before any business logic ran. */
     public AuditEvent securityRejected(AuditContext context, AuditAction action, String path, String reasonCode) {
+        return event(
+                context, null, action, HTTP_ENDPOINT, path, null, null, AuditOutcome.REJECTED, reasonCode, Map.of());
+    }
+
+    private AuditEvent event(
+            AuditContext context,
+            @Nullable Long onBehalfOfUserId,
+            AuditAction action,
+            String resourceType,
+            @Nullable String resourceId,
+            @Nullable Long transactionId,
+            @Nullable String requestId,
+            AuditOutcome outcome,
+            @Nullable String reasonCode,
+            Map<String, Object> metadata) {
         return new AuditEvent(
                 UUID.randomUUID(),
                 clock.instant(),
                 context.actor(),
+                onBehalfOfUserId,
                 action,
-                HTTP_ENDPOINT,
-                path,
-                null,
-                null,
+                resourceType,
+                resourceId,
+                transactionId,
+                requestId,
                 context.correlationId(),
                 context.channel(),
-                AuditOutcome.REJECTED,
+                outcome,
                 reasonCode,
-                Map.of());
+                metadata);
     }
 }

@@ -21,6 +21,12 @@ public final class Permissions {
     public static final String CUSTOMER_MANAGE_PAYEES =
             "hasAuthority('SCOPE_bank.payees.write') and hasRole('CUSTOMER')";
 
+    /** Take in and pay out cash at a branch counter on behalf of customers. */
+    public static final String TELLER_CASH = "hasAuthority('SCOPE_bank.cash') and hasRole('TELLER')";
+
+    /** Pay out cash at a self-service terminal. */
+    public static final String ATM_WITHDRAW = "hasAuthority('SCOPE_bank.atm.withdraw') and hasRole('ATM')";
+
     /**
      * Freeze, unfreeze, close accounts and change their limits. Administrators manage accounts but
      * cannot move customer money: there is deliberately no transfer permission for this role.

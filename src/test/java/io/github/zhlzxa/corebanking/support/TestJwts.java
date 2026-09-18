@@ -15,7 +15,9 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -65,6 +67,7 @@ public final class TestJwts {
         private Duration lifetime = Duration.ofMinutes(5);
         private String scope = "";
         private boolean trusted = true;
+        private final Map<String, Object> extraClaims = new LinkedHashMap<>();
 
         private Builder(String subject) {
             this.subject = subject;
@@ -91,6 +94,11 @@ public final class TestJwts {
             return this;
         }
 
+        public Builder claim(String name, Object value) {
+            extraClaims.put(name, value);
+            return this;
+        }
+
         public Builder signedByUntrustedKey() {
             this.trusted = false;
             return this;
@@ -104,6 +112,7 @@ public final class TestJwts {
                     .issuedAt(issuedAt)
                     .expiresAt(issuedAt.plus(lifetime))
                     .claim("scope", scope)
+                    .claims(all -> all.putAll(extraClaims))
                     .build();
             JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).build();
             JwtEncoder encoder = trusted ? TRUSTED_ENCODER : UNTRUSTED_ENCODER;

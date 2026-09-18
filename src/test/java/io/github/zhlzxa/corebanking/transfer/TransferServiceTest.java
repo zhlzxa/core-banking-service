@@ -24,11 +24,19 @@ import io.github.zhlzxa.corebanking.audit.AuditEvent;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
 import io.github.zhlzxa.corebanking.audit.AuditOutcome;
+import io.github.zhlzxa.corebanking.audit.BestEffortAuditRecorder;
 import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
+import io.github.zhlzxa.corebanking.posting.AccountLocks;
+import io.github.zhlzxa.corebanking.posting.AccountRuleViolationException;
+import io.github.zhlzxa.corebanking.posting.CurrencyMismatchException;
+import io.github.zhlzxa.corebanking.posting.IdempotencyConflictException;
+import io.github.zhlzxa.corebanking.posting.IdempotentTransactions;
+import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
+import io.github.zhlzxa.corebanking.posting.LedgerPoster;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
 import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
@@ -40,11 +48,11 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -72,6 +80,8 @@ class TransferServiceTest {
     @Mock
     private IndependentAuditRecorder independentAuditRecorder;
 
+    private BestEffortAuditRecorder bestEffortAuditRecorder;
+
     @Mock
     private DailyTransferUsageRepository dailyTransferUsageRepository;
 
@@ -83,8 +93,25 @@ class TransferServiceTest {
     private AuditEventFactory auditEventFactory =
             new AuditEventFactory(Clock.fixed(Instant.parse("2026-09-18T08:00:00Z"), ZoneOffset.UTC));
 
-    @InjectMocks
     private TransferService transferService;
+
+    /**
+     * The real posting components are wired around the mocked repositories, so these tests verify
+     * the complete sequence of storage operations a transfer performs.
+     */
+    @BeforeEach
+    void createService() {
+        bestEffortAuditRecorder = new BestEffortAuditRecorder(independentAuditRecorder);
+        transferService = new TransferService(
+                new AccountLocks(accountRepository),
+                new IdempotentTransactions(transactionRepository),
+                new LedgerPoster(accountRepository, ledgerRepository, transactionRepository),
+                dailyTransferUsageRepository,
+                businessCalendar,
+                auditEventRepository,
+                auditEventFactory,
+                bestEffortAuditRecorder);
+    }
 
     @Test
     void rejectsTransferToSameAccountBeforeTouchingStorage() {

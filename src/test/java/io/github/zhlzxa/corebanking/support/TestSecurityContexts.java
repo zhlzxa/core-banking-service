@@ -31,7 +31,7 @@ public final class TestSecurityContexts {
             authorities[i] = "SCOPE_" + scopes[i];
         }
         authorities[scopes.length] = "ROLE_CUSTOMER";
-        BankPrincipal principal = new BankPrincipal(userId, TestJwts.ISSUER, "user-" + userId, UserRole.CUSTOMER);
+        BankPrincipal principal = new BankPrincipal(userId, TestJwts.ISSUER, "user-" + userId, UserRole.CUSTOMER, null);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(new BankAuthenticationToken(
                 principal, jwt, List.copyOf(AuthorityUtils.createAuthorityList(authorities))));

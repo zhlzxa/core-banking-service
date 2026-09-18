@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.JdbcUpdateAffectedIncorrectNumberOfRowsException;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
 
@@ -18,12 +18,11 @@ class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
     private AccountRepository accountRepository;
 
     @Autowired
-    private JdbcClient jdbc;
+    private TestDataFactory data;
 
     @BeforeEach
     void seedAccount() {
-        jdbc.sql("INSERT INTO accounts (id, currency, balance) VALUES (10, 'HKD', 100.00)")
-                .update();
+        data.createCustomerAccount(10, "HKD", "100.00");
     }
 
     @Test
@@ -55,6 +54,22 @@ class JdbcAccountRepositoryIT extends AbstractIntegrationIT {
                 .isInstanceOf(JdbcUpdateAffectedIncorrectNumberOfRowsException.class);
 
         assertThat(accountRepository.findById(10).orElseThrow().balance()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void internalAccountsMayGoNegative() {
+        long cash = data.createInternalAccount("CASH-TEST", "HKD");
+
+        accountRepository.debit(cash, new BigDecimal("250.00"));
+
+        assertThat(accountRepository.findById(cash).orElseThrow().balance()).isEqualByComparingTo("-250.00");
+        assertThat(accountRepository.findInternalAccountId("CASH-TEST")).isEqualTo(cash);
+    }
+
+    @Test
+    void unknownInternalAccountCodeIsNotFound() {
+        assertThatThrownBy(() -> accountRepository.findInternalAccountId("NO-SUCH-CODE"))
+                .isInstanceOf(AccountNotFoundException.class);
     }
 
     @Test

@@ -52,3 +52,9 @@ corebanking:
   # Daily transfer limits reset at midnight in the bank's home time zone.
   business-day:
     zone: Asia/Hong_Kong
+  # Teller withdrawals of this amount or more need a second teller's approval.
+  cash:
+    approval-threshold: 50000
+    approval-validity: 30m
+    # The most a terminal may pay out in a single withdrawal.
+    atm-withdrawal-limit: 20000

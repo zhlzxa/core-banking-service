@@ -2,26 +2,26 @@ package io.github.zhlzxa.corebanking.transfer;
 
 import io.github.zhlzxa.corebanking.account.Account;
 import io.github.zhlzxa.corebanking.account.AccountNotFoundException;
-import io.github.zhlzxa.corebanking.account.AccountRepository;
 import io.github.zhlzxa.corebanking.account.DailyTransferUsageRepository;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
 import io.github.zhlzxa.corebanking.audit.AuditEventFactory;
 import io.github.zhlzxa.corebanking.audit.AuditEventRepository;
-import io.github.zhlzxa.corebanking.audit.AuditOutcome;
-import io.github.zhlzxa.corebanking.audit.IndependentAuditRecorder;
-import io.github.zhlzxa.corebanking.common.error.BusinessException;
-import io.github.zhlzxa.corebanking.common.error.ErrorCode;
+import io.github.zhlzxa.corebanking.audit.BestEffortAuditRecorder;
+import io.github.zhlzxa.corebanking.audit.MovementKind;
 import io.github.zhlzxa.corebanking.common.money.CurrencyUnits;
 import io.github.zhlzxa.corebanking.common.time.BusinessCalendar;
-import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
-import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
+import io.github.zhlzxa.corebanking.posting.AccountLocks;
+import io.github.zhlzxa.corebanking.posting.AccountLocks.LockedPair;
+import io.github.zhlzxa.corebanking.posting.AccountRuleViolationException;
+import io.github.zhlzxa.corebanking.posting.CurrencyMismatchException;
+import io.github.zhlzxa.corebanking.posting.IdempotencyConflictException;
+import io.github.zhlzxa.corebanking.posting.IdempotentTransactions;
+import io.github.zhlzxa.corebanking.posting.IdempotentTransactions.Claim;
+import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
+import io.github.zhlzxa.corebanking.posting.LedgerPoster;
 import io.github.zhlzxa.corebanking.security.Permissions;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
-import io.github.zhlzxa.corebanking.transaction.NewTransaction;
-import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
-import io.github.zhlzxa.corebanking.transaction.TransactionStatus;
 import java.util.Map;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,9 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  * event commit together. Any exception rolls everything back, including the transaction row that
  * claimed the request id, so a rejected request can be retried with the same key.
  *
- * <p>Concurrency is controlled with pessimistic row locks. Both accounts are locked in ascending
- * id order regardless of transfer direction, so two opposite transfers between the same accounts
- * queue behind each other instead of deadlocking.
+ * <p>Concurrency is controlled with pessimistic row locks, acquired through {@link AccountLocks}
+ * in ascending id order, so two opposite transfers between the same accounts queue behind each
+ * other instead of deadlocking.
  *
  * <p>Authorization has three layers: the client application must hold the {@code bank.transfer}
  * scope, the caller must have the bank role {@code CUSTOMER}, and the source account must belong
@@ -55,32 +55,32 @@ public class TransferService {
 
     private static final Logger log = LoggerFactory.getLogger(TransferService.class);
 
-    private final AccountRepository accountRepository;
-    private final TransactionRepository transactionRepository;
-    private final LedgerRepository ledgerRepository;
-    private final AuditEventRepository auditEventRepository;
-    private final AuditEventFactory auditEventFactory;
-    private final IndependentAuditRecorder independentAuditRecorder;
+    private final AccountLocks accountLocks;
+    private final IdempotentTransactions idempotentTransactions;
+    private final LedgerPoster ledgerPoster;
     private final DailyTransferUsageRepository dailyTransferUsageRepository;
     private final BusinessCalendar businessCalendar;
+    private final AuditEventRepository auditEventRepository;
+    private final AuditEventFactory auditEventFactory;
+    private final BestEffortAuditRecorder bestEffortAuditRecorder;
 
     public TransferService(
-            AccountRepository accountRepository,
-            TransactionRepository transactionRepository,
-            LedgerRepository ledgerRepository,
+            AccountLocks accountLocks,
+            IdempotentTransactions idempotentTransactions,
+            LedgerPoster ledgerPoster,
+            DailyTransferUsageRepository dailyTransferUsageRepository,
+            BusinessCalendar businessCalendar,
             AuditEventRepository auditEventRepository,
             AuditEventFactory auditEventFactory,
-            IndependentAuditRecorder independentAuditRecorder,
-            DailyTransferUsageRepository dailyTransferUsageRepository,
-            BusinessCalendar businessCalendar) {
-        this.accountRepository = accountRepository;
-        this.transactionRepository = transactionRepository;
-        this.ledgerRepository = ledgerRepository;
-        this.auditEventRepository = auditEventRepository;
-        this.auditEventFactory = auditEventFactory;
-        this.independentAuditRecorder = independentAuditRecorder;
+            BestEffortAuditRecorder bestEffortAuditRecorder) {
+        this.accountLocks = accountLocks;
+        this.idempotentTransactions = idempotentTransactions;
+        this.ledgerPoster = ledgerPoster;
         this.dailyTransferUsageRepository = dailyTransferUsageRepository;
         this.businessCalendar = businessCalendar;
+        this.auditEventRepository = auditEventRepository;
+        this.auditEventFactory = auditEventFactory;
+        this.bestEffortAuditRecorder = bestEffortAuditRecorder;
     }
 
     /**
@@ -115,24 +115,25 @@ public class TransferService {
         // Locks are taken before the request id is claimed: the transaction row references both
         // accounts, so their existence must be established first, and holding the locks early
         // costs nothing because a retry has to wait for the original request anyway.
-        LockedAccounts accounts = lockInIdOrder(command.fromAccountId(), command.toAccountId());
-        if (!accounts.source().isOwnedBy(command.customerId())
-                || !accounts.destination().isCustomerAccount()) {
+        LockedPair accounts = accountLocks.lockPair(command.fromAccountId(), command.toAccountId());
+        Account source = accounts.first();
+        Account destination = accounts.second();
+        if (!source.isOwnedBy(command.customerId()) || !destination.isCustomerAccount()) {
             throw new AccountNotFoundException();
         }
 
-        NewTransaction instruction = command.toNewTransaction();
-        Optional<Long> claimed = transactionRepository.insertPendingIfAbsent(instruction);
-        if (claimed.isEmpty()) {
-            return resolveRetry(instruction);
+        Claim claim = idempotentTransactions.claim(command.toNewTransaction());
+        if (claim instanceof Claim.Retry retry) {
+            log.info(
+                    "Idempotent retry resolved: transactionId={}",
+                    retry.original().id());
+            return retry.original();
         }
-        long transactionId = claimed.get();
+        long transactionId = ((Claim.New) claim).transactionId();
 
         // Rules are evaluated on the locked rows, so no concurrent change can invalidate them before
         // commit. The order decides which reason a client sees when several rules fail: account
         // state first, then currency, then funds, then limits.
-        Account source = accounts.source();
-        Account destination = accounts.destination();
         if (!source.status().canBeDebited()) {
             throw AccountRuleViolationException.sourceNotActive();
         }
@@ -155,18 +156,12 @@ public class TransferService {
             throw AccountRuleViolationException.limitExceeded();
         }
 
-        accountRepository.debit(source.id(), command.amount());
-        accountRepository.credit(destination.id(), command.amount());
-        ledgerRepository.append(LedgerEntry.debit(transactionId, source.id(), command.amount(), command.currency()));
-        ledgerRepository.append(
-                LedgerEntry.credit(transactionId, destination.id(), command.amount(), command.currency()));
-        transactionRepository.updateStatus(transactionId, TransactionStatus.COMPLETED);
-        auditEventRepository.append(auditEventFactory.transferCompleted(audit, command.requestId(), transactionId));
-
+        BankTransaction completed =
+                ledgerPoster.post(transactionId, source.id(), destination.id(), command.amount(), command.currency());
+        auditEventRepository.append(auditEventFactory.movementCompleted(
+                audit, MovementKind.TRANSFER, command.requestId(), transactionId, command.customerId()));
         log.info("Transfer completed: transactionId={}", transactionId);
-        return transactionRepository
-                .findById(transactionId)
-                .orElseThrow(() -> new IllegalStateException("Transaction " + transactionId + " vanished"));
+        return completed;
     }
 
     private static void validate(TransferCommand command) {
@@ -185,56 +180,17 @@ public class TransferService {
     }
 
     /**
-     * The request id is already taken. Because the claiming insert waits for any in-flight
-     * transaction with the same key, the row found here is always committed.
-     */
-    private BankTransaction resolveRetry(NewTransaction instruction) {
-        BankTransaction existing = transactionRepository
-                .findByRequestId(instruction.requestId())
-                .orElseThrow(() -> new IllegalStateException("Request id claimed but no transaction found"));
-        if (!existing.isSameInstructionAs(instruction)) {
-            throw new IdempotencyConflictException();
-        }
-        log.info("Idempotent retry resolved: transactionId={}", existing.id());
-        return existing;
-    }
-
-    private LockedAccounts lockInIdOrder(long fromAccountId, long toAccountId) {
-        long firstId = Math.min(fromAccountId, toAccountId);
-        long secondId = Math.max(fromAccountId, toAccountId);
-        Account first = accountRepository.findByIdForUpdate(firstId).orElseThrow(AccountNotFoundException::new);
-        Account second = accountRepository.findByIdForUpdate(secondId).orElseThrow(AccountNotFoundException::new);
-        return first.id() == fromAccountId ? new LockedAccounts(first, second) : new LockedAccounts(second, first);
-    }
-
-    /**
      * Records a rejected or failed attempt without affecting its outcome. The caller always sees the
      * original exception: if the audit write itself fails, that is logged for operations but must
      * not turn a business rejection into a technical error.
      */
     private void recordUnsuccessfulAttempt(AuditContext audit, TransferCommand command, RuntimeException cause) {
-        AuditOutcome outcome;
-        String reasonCode;
-        if (cause instanceof BusinessException business) {
-            outcome = AuditOutcome.REJECTED;
-            reasonCode = business.errorCode().name();
-        } else {
-            outcome = AuditOutcome.FAILED;
-            reasonCode = ErrorCode.INTERNAL_ERROR.name();
-        }
         Map<String, Object> instruction = Map.of(
                 "fromAccountId", command.fromAccountId(),
                 "toAccountId", command.toAccountId(),
                 "amount", command.amount() == null ? "" : command.amount().toPlainString(),
                 "currency", String.valueOf(command.currency()));
-        try {
-            independentAuditRecorder.record(auditEventFactory.transferUnsuccessful(
-                    audit, command.requestId(), outcome, reasonCode, instruction));
-        } catch (RuntimeException auditFailure) {
-            log.error(
-                    "Failed to record audit event for unsuccessful transfer: reasonCode={}", reasonCode, auditFailure);
-        }
+        bestEffortAuditRecorder.record(auditEventFactory.movementUnsuccessful(
+                audit, MovementKind.TRANSFER, command.requestId(), cause, instruction, command.customerId()));
     }
-
-    private record LockedAccounts(Account source, Account destination) {}
 }

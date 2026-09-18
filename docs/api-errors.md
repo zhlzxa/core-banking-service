@@ -30,11 +30,14 @@ problem document with media type `application/problem+json`.
 | 400 | `MALFORMED_REQUEST` | The body is not valid JSON or has the wrong structure | Fix the request encoding |
 | 400 | `INVALID_TRANSFER` | The instruction is structurally invalid, for example source equals destination | Correct the instruction |
 | 400 | `INVALID_AMOUNT_SCALE` | The amount has more decimal places than the currency allows (for example fractional JPY) | Round to the currency's minor unit |
+| 400 | `CURRENCY_NOT_SUPPORTED` | The bank does not handle cash in this currency | Use a supported currency |
 | 400 | `INVALID_CURSOR` | The pagination cursor is malformed or was altered | Restart from the first page |
 | 401 | `UNAUTHENTICATED` | Token missing, invalid, expired, for another audience, or the user is unknown or inactive | Obtain a new token; do not retry blindly |
 | 403 | `ACCESS_DENIED` | The token lacks the required scope or the user lacks the required role | Request the proper scope or role |
+| 403 | `FOUR_EYES_REQUIRED` | The teller tried to decide their own withdrawal request | Ask another teller |
 | 404 | `ACCOUNT_NOT_FOUND` | The account does not exist or is not visible to the caller | Check the account identifier |
 | 404 | `TRANSFER_NOT_FOUND` | The transfer does not exist or does not involve the caller's accounts | Check the transfer identifier |
+| 404 | `APPROVAL_NOT_FOUND` | The withdrawal approval does not exist | Check the approval identifier |
 | 404 | `PAYEE_NOT_FOUND` | The payee does not exist or belongs to another customer | Reload the payee list |
 | 409 | `INSUFFICIENT_BALANCE` | The source balance does not cover the amount | Retry with the same `requestId` once funded |
 | 409 | `SOURCE_ACCOUNT_NOT_ACTIVE` | The source account is frozen, dormant or closed | Contact the bank |
@@ -44,6 +47,8 @@ problem document with media type `application/problem+json`.
 | 409 | `CURRENCY_MISMATCH` | The instruction currency differs from an account currency | Correct the currency |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | The `requestId` was already used for a different instruction | Use a new `requestId` |
 | 409 | `PAYEE_ALREADY_EXISTS` | The destination is already saved as a payee | Use the existing payee |
+| 409 | `APPROVAL_NOT_PENDING` | The approval has already been decided | Reload the approval |
+| 409 | `APPROVAL_EXPIRED` | Nobody decided the approval in time; it is now expired | Submit a new withdrawal request |
 | 409 | `CONCURRENT_MODIFICATION` | The resource changed since the client read it | Reload, then reapply the change if still wanted |
 | 500 | `INTERNAL_ERROR` | Unexpected failure; details are in the server log under the correlation id | Retry with the same `requestId`; contact support with the `correlationId` |
 

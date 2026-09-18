@@ -41,16 +41,42 @@ public class TestDataFactory {
         return createUser(subject, "CUSTOMER", "ACTIVE");
     }
 
+    /**
+     * Creates a customer account, or an internal account with code {@code TEST-<id>} when no owner
+     * is given.
+     */
     public void createAccount(long accountId, Long ownerUserId, String currency, String balance) {
         jdbc.sql("""
-                        INSERT INTO accounts (id, user_id, currency, balance)
-                        VALUES (:id, :userId, :currency, :balance)
+                        INSERT INTO accounts (id, user_id, account_type, code, currency, balance)
+                        VALUES (:id, :userId, :type, :code, :currency, :balance)
                         """)
                 .param("id", accountId)
                 .param("userId", ownerUserId)
+                .param("type", ownerUserId == null ? "INTERNAL" : "CUSTOMER")
+                .param("code", ownerUserId == null ? "TEST-" + accountId : null)
                 .param("currency", currency)
                 .param("balance", new BigDecimal(balance))
                 .update();
+    }
+
+    /** Creates a customer account owned by a new customer of its own. */
+    public long createCustomerAccount(long accountId, String currency, String balance) {
+        long owner = createCustomer("owner-of-" + accountId);
+        createAccount(accountId, owner, currency, balance);
+        return owner;
+    }
+
+    /** Creates an internal account such as a cash account; returns its generated id. */
+    public long createInternalAccount(String code, String currency) {
+        return jdbc.sql("""
+                        INSERT INTO accounts (account_type, code, currency, balance)
+                        VALUES ('INTERNAL', :code, :currency, 0)
+                        RETURNING id
+                        """)
+                .param("code", code)
+                .param("currency", currency)
+                .query(Long.class)
+                .single();
     }
 
     /**
@@ -72,6 +98,19 @@ public class TestDataFactory {
                 .param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
                 .query(Long.class)
                 .single();
+    }
+
+    public void createTerminal(String terminalId, String subject, String branchCode, String status) {
+        jdbc.sql("""
+                        INSERT INTO terminals (id, identity_issuer, identity_subject, terminal_type, branch_code, status)
+                        VALUES (:id, :issuer, :subject, 'ATM', :branch, :status)
+                        """)
+                .param("id", terminalId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
+                .param("branch", branchCode)
+                .param("status", status)
+                .update();
     }
 
     public void setStatus(long accountId, String status, String reason) {

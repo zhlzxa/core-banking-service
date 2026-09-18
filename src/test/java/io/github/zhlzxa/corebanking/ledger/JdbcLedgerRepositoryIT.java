@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.ledger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,12 +19,15 @@ class JdbcLedgerRepositoryIT extends AbstractIntegrationIT {
     @Autowired
     private JdbcClient jdbc;
 
+    @Autowired
+    private TestDataFactory data;
+
     private long transactionId;
 
     @BeforeEach
     void seedTransaction() {
-        jdbc.sql("INSERT INTO accounts (id, currency, balance) VALUES (1, 'HKD', 0), (2, 'HKD', 0)")
-                .update();
+        data.createCustomerAccount(1, "HKD", "0");
+        data.createCustomerAccount(2, "HKD", "0");
         transactionId = jdbc.sql("""
                         INSERT INTO transactions
                             (request_id, transaction_type, status, from_account_id, to_account_id, amount, currency)

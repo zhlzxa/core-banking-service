@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-18
+
+### Added
+
+- Internal accounts identified by code; cash accounts per currency carry the
+  bank's side of cash movements.
+- Teller cash deposits and withdrawals (`/teller/deposits`,
+  `/teller/withdrawals`), attributed to the teller, the branch and the
+  customer served.
+- Four-eyes approval of teller withdrawals above a configurable threshold,
+  with expiry and a database-enforced maker/checker separation.
+- ATM terminals as machine identities with their own role; `/atm/withdrawals`
+  with a per-withdrawal cap. Terminals and people are separated at the URL
+  level.
+- Audit events record who acted on behalf of which customer, and through which
+  channel (`API`, `BRANCH`, `ATM`).
+- ADR-0008.
+
+### Changed
+
+- Double-entry posting, ordered locking and idempotent claims are shared
+  components used by transfers and cash movements.
+
 ## [0.8.0] - 2026-09-18
 
 ### Added
@@ -142,7 +165,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.5.0...v0.6.0

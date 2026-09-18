@@ -3,6 +3,7 @@ package io.github.zhlzxa.corebanking.ledger;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
+import io.github.zhlzxa.corebanking.support.TestDataFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,12 +17,15 @@ class LedgerSchemaIT extends AbstractIntegrationIT {
     @Autowired
     private JdbcClient jdbc;
 
+    @Autowired
+    private TestDataFactory data;
+
     private long transactionId;
 
     @BeforeEach
     void seedOnePostedTransfer() {
-        jdbc.sql("INSERT INTO accounts (id, currency, balance) VALUES (1, 'HKD', 900), (2, 'HKD', 100)")
-                .update();
+        data.createCustomerAccount(1, "HKD", "900");
+        data.createCustomerAccount(2, "HKD", "100");
         transactionId = jdbc.sql("""
                         INSERT INTO transactions
                             (request_id, transaction_type, status, from_account_id, to_account_id, amount, currency)
@@ -57,6 +61,14 @@ class LedgerSchemaIT extends AbstractIntegrationIT {
                         .update())
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ck_accounts_balance_non_negative");
+    }
+
+    @Test
+    void anAccountIsEitherACustomerAccountWithOwnerOrAnInternalAccountWithCode() {
+        assertThatThrownBy(() -> jdbc.sql("INSERT INTO accounts (currency, balance) VALUES ('HKD', 0)")
+                        .update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_accounts_owner_matches_type");
     }
 
     @Test

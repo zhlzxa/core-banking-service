@@ -10,6 +10,8 @@ import org.jspecify.annotations.Nullable;
  * An immutable audit record.
  *
  * @param eventId globally unique id, usable to deduplicate if events are ever exported
+ * @param onBehalfOfUserId the customer the action was performed for; the actor themselves for
+ *     self-service, the account owner when staff or a machine acted
  * @param resourceType kind of object acted on, for example {@code TRANSFER} or {@code HTTP_ENDPOINT}
  * @param transactionId the money movement, when one exists; rejected attempts have none
  * @param reasonCode stable code explaining a non-successful outcome; never an exception message
@@ -19,6 +21,7 @@ public record AuditEvent(
         UUID eventId,
         Instant occurredAt,
         AuditActor actor,
+        @Nullable Long onBehalfOfUserId,
         AuditAction action,
         String resourceType,
         @Nullable String resourceId,

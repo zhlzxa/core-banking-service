@@ -14,12 +14,15 @@ public enum ErrorCode {
     MALFORMED_REQUEST(HttpStatus.BAD_REQUEST, "Malformed request"),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "Authentication required"),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "Access denied"),
+    FOUR_EYES_REQUIRED(HttpStatus.FORBIDDEN, "Four-eyes approval required"),
     INVALID_TRANSFER(HttpStatus.BAD_REQUEST, "Invalid transfer"),
     INVALID_CURSOR(HttpStatus.BAD_REQUEST, "Invalid cursor"),
     INVALID_AMOUNT_SCALE(HttpStatus.BAD_REQUEST, "Invalid amount scale"),
+    CURRENCY_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "Currency not supported"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Account not found"),
     TRANSFER_NOT_FOUND(HttpStatus.NOT_FOUND, "Transfer not found"),
     PAYEE_NOT_FOUND(HttpStatus.NOT_FOUND, "Payee not found"),
+    APPROVAL_NOT_FOUND(HttpStatus.NOT_FOUND, "Approval not found"),
     INSUFFICIENT_BALANCE(HttpStatus.CONFLICT, "Insufficient balance"),
     CURRENCY_MISMATCH(HttpStatus.CONFLICT, "Currency mismatch"),
     SOURCE_ACCOUNT_NOT_ACTIVE(HttpStatus.CONFLICT, "Source account not active"),
@@ -29,6 +32,8 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Idempotency key reused"),
     PAYEE_ALREADY_EXISTS(HttpStatus.CONFLICT, "Payee already exists"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "Concurrent modification"),
+    APPROVAL_NOT_PENDING(HttpStatus.CONFLICT, "Approval not pending"),
+    APPROVAL_EXPIRED(HttpStatus.CONFLICT, "Approval expired"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 
     private final HttpStatus httpStatus;

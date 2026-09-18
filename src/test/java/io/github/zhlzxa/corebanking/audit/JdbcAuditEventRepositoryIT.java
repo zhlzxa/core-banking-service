@@ -31,7 +31,8 @@ class JdbcAuditEventRepositoryIT extends AbstractIntegrationIT {
         auditEventRepository.append(new AuditEvent(
                 eventId,
                 Instant.parse("2026-09-18T08:00:00.123456Z"),
-                new AuditActor(alice, TestDataFactory.ISSUER, "alice-sub", "CUSTOMER"),
+                new AuditActor(alice, TestDataFactory.ISSUER, "alice-sub", "CUSTOMER", null, "BR-001"),
+                alice,
                 AuditAction.TRANSFER_REJECTED,
                 "TRANSFER_REQUEST",
                 "req-1",
@@ -45,7 +46,7 @@ class JdbcAuditEventRepositoryIT extends AbstractIntegrationIT {
 
         Map<String, Object> row =
                 jdbc.sql("""
-                        SELECT actor_user_id, actor_subject, action, outcome, reason_code, channel,
+                        SELECT actor_user_id, actor_subject, actor_branch_code, on_behalf_of_user_id, action, outcome, reason_code, channel,
                                correlation_id, transaction_id, metadata ->> 'amount' AS amount,
                                occurred_at = TIMESTAMPTZ '2026-09-18 08:00:00.123456+00' AS exact_time
                         FROM audit_events WHERE event_id = :eventId
@@ -53,6 +54,8 @@ class JdbcAuditEventRepositoryIT extends AbstractIntegrationIT {
         assertThat(row)
                 .containsEntry("actor_user_id", alice)
                 .containsEntry("actor_subject", "alice-sub")
+                .containsEntry("actor_branch_code", "BR-001")
+                .containsEntry("on_behalf_of_user_id", alice)
                 .containsEntry("action", "TRANSFER_REJECTED")
                 .containsEntry("outcome", "REJECTED")
                 .containsEntry("reason_code", "INSUFFICIENT_BALANCE")
@@ -69,6 +72,7 @@ class JdbcAuditEventRepositoryIT extends AbstractIntegrationIT {
                 UUID.randomUUID(),
                 Instant.now(),
                 AuditActor.anonymous(),
+                null,
                 AuditAction.AUTHENTICATION_FAILED,
                 "HTTP_ENDPOINT",
                 "/transfers",

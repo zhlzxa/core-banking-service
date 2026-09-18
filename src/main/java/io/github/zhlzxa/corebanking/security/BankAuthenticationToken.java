@@ -5,14 +5,17 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-/** Authentication for a request that presented a valid bearer token of a known, active user. */
+/**
+ * Authentication for a request that presented a valid bearer token of a known, active user or
+ * registered terminal.
+ */
 public class BankAuthenticationToken extends AbstractAuthenticationToken {
 
-    private final BankPrincipal principal;
+    private final AuditablePrincipal principal;
     private final Jwt jwt;
 
     public BankAuthenticationToken(
-            BankPrincipal principal, Jwt jwt, Collection<? extends GrantedAuthority> authorities) {
+            AuditablePrincipal principal, Jwt jwt, Collection<? extends GrantedAuthority> authorities) {
         super(authorities);
         this.principal = principal;
         this.jwt = jwt;
@@ -20,7 +23,7 @@ public class BankAuthenticationToken extends AbstractAuthenticationToken {
     }
 
     @Override
-    public BankPrincipal getPrincipal() {
+    public AuditablePrincipal getPrincipal() {
         return principal;
     }
 

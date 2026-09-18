@@ -1,4 +1,4 @@
-package io.github.zhlzxa.corebanking.transfer;
+package io.github.zhlzxa.corebanking.posting;
 
 import io.github.zhlzxa.corebanking.common.error.BusinessException;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
