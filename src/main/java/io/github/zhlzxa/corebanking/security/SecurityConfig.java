@@ -14,7 +14,9 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * HTTP security for the API.
  *
- * <p>Every endpoint except health and info requires a valid bearer token. Fine-grained
+ * <p>Every endpoint except the probes, info and metrics requires a valid bearer token. Those three
+ * are served on the management port, which is reachable only from inside the cluster, and expose
+ * no customer data. Fine-grained
  * authorization (scope, role and resource ownership) is enforced in the service layer, close to the
  * operations it protects, so that it cannot be bypassed by adding a new endpoint.
  */
@@ -38,7 +40,7 @@ public class SecurityConfig {
                 // Machines and people are kept apart at the URL level: terminals may only call the
                 // terminal endpoints, and those endpoints accept terminals only.
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                "/actuator/health", "/actuator/health/**", "/actuator/info")
+                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus")
                         .permitAll()
                         .requestMatchers("/atm/**")
                         .hasRole(TerminalPrincipal.ROLE)

@@ -7,5 +7,9 @@ spring:
     password: ${DB_PASSWORD:local-dev-only}
 
 logging:
+  # Human-readable logs on a developer's console.
+  structured:
+    format:
+      console: ""
   level:
     io.github.zhlzxa.corebanking: DEBUG

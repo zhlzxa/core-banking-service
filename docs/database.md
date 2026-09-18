@@ -187,6 +187,7 @@ columns automatically.
 | `idx_transactions_reconciliation` | Unresolved FPS payments that are due (partial index) |
 | `idx_audit_events_action_time` | All events of a kind in a period, for example failed logins |
 | `idx_outbox_events_unpublished` | Unpublished events that are due, and the backlog (partial index) |
+| `idx_transactions_needs_investigation` | Escalated FPS payments, oldest first, and their count (partial index) |
 
 Query plans are inspected with `QueryPlanInvestigationIT`, which is disabled in
 CI because plan shapes depend on data volume and statistics. With 200,000
@@ -215,3 +216,4 @@ units.
 | V9 | Self-service terminal identities |
 | V10 | FPS payment tracking, reversals, FPS clearing accounts, SYSTEM audit channel |
 | V11 | Transactional outbox, consumer deduplication, example account notifications |
+| V12 | Index of FPS payments escalated for investigation |

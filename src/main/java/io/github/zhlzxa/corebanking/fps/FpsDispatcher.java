@@ -21,10 +21,12 @@ class FpsDispatcher {
 
     private final FpsClient fpsClient;
     private final FpsOutcomeService outcomeService;
+    private final FpsMetrics metrics;
 
-    FpsDispatcher(FpsClient fpsClient, FpsOutcomeService outcomeService) {
+    FpsDispatcher(FpsClient fpsClient, FpsOutcomeService outcomeService, FpsMetrics metrics) {
         this.fpsClient = fpsClient;
         this.outcomeService = outcomeService;
+        this.metrics = metrics;
     }
 
     /** Sends the payment, reusing its end-to-end id, and records the result. */
@@ -34,7 +36,10 @@ class FpsDispatcher {
         }
         FpsClient.Decision decision;
         try {
-            decision = fpsClient.send(payment.toInstruction());
+            decision = metrics.time(
+                    "send",
+                    () -> fpsClient.send(payment.toInstruction()),
+                    sent -> sent.accepted() ? "accepted" : "rejected");
         } catch (FpsCommunicationException ex) {
             log.warn(
                     "No response from FPS; outcome unknown: transactionId={}, endToEndId={}",
