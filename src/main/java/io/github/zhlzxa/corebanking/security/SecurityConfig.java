@@ -2,6 +2,9 @@ package io.github.zhlzxa.corebanking.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authorization.AuthenticatedAuthorizationManager;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -32,11 +35,18 @@ public class SecurityConfig {
                 // cross-site request forgery has nothing to exploit.
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(
-                        auth -> auth.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
-                                .permitAll()
-                                .anyRequest()
-                                .authenticated())
+                // Machines and people are kept apart at the URL level: terminals may only call the
+                // terminal endpoints, and those endpoints accept terminals only.
+                .authorizeHttpRequests(auth -> auth.requestMatchers(
+                                "/actuator/health", "/actuator/health/**", "/actuator/info")
+                        .permitAll()
+                        .requestMatchers("/atm/**")
+                        .hasRole(TerminalPrincipal.ROLE)
+                        .anyRequest()
+                        .access(AuthorizationManagers.allOf(
+                                AuthenticatedAuthorizationManager.authenticated(),
+                                AuthorizationManagers.not(
+                                        AuthorityAuthorizationManager.hasRole(TerminalPrincipal.ROLE)))))
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))

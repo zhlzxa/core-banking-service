@@ -56,3 +56,5 @@ corebanking:
   cash:
     approval-threshold: 50000
     approval-validity: 30m
+    # The most a terminal may pay out in a single withdrawal.
+    atm-withdrawal-limit: 20000

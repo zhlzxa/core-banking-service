@@ -4,7 +4,6 @@ import io.github.zhlzxa.corebanking.audit.AuditActor;
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
 import io.github.zhlzxa.corebanking.user.UserRole;
 import org.jspecify.annotations.Nullable;
-import org.springframework.security.core.AuthenticatedPrincipal;
 
 /**
  * The authenticated caller, resolved from the token's external identity to the bank's own user.
@@ -20,7 +19,7 @@ public record BankPrincipal(
         String issuer,
         String subject,
         UserRole role,
-        @Nullable String branchCode) implements AuthenticatedPrincipal {
+        @Nullable String branchCode) implements AuditablePrincipal {
 
     /** Returns the internal user id; the external subject is deliberately not used as a name. */
     @Override
@@ -28,6 +27,7 @@ public record BankPrincipal(
         return Long.toString(userId);
     }
 
+    @Override
     public AuditActor toAuditActor() {
         return new AuditActor(userId, issuer, subject, role.name(), null, branchCode);
     }
@@ -36,6 +36,7 @@ public record BankPrincipal(
      * The channel a request from this principal arrived through, derived from how the caller
      * authenticated rather than from anything the request claims about itself.
      */
+    @Override
     public AuditChannel channel() {
         return role == UserRole.TELLER ? AuditChannel.BRANCH : AuditChannel.API;
     }

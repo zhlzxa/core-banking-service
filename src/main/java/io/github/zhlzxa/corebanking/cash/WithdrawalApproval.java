@@ -2,6 +2,7 @@ package io.github.zhlzxa.corebanking.cash;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -30,7 +31,7 @@ public record WithdrawalApproval(
     }
 
     public boolean isSameRequestAs(CashCommand command) {
-        return makerUserId == command.operatorId()
+        return Objects.equals(makerUserId, command.operatorId())
                 && accountId == command.accountId()
                 && amount.compareTo(command.amount()) == 0
                 && currency.equals(command.currency());

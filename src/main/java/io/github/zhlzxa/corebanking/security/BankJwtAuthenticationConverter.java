@@ -1,11 +1,14 @@
 package io.github.zhlzxa.corebanking.security;
 
+import io.github.zhlzxa.corebanking.terminal.Terminal;
+import io.github.zhlzxa.corebanking.terminal.TerminalRepository;
 import io.github.zhlzxa.corebanking.user.BankUser;
 import io.github.zhlzxa.corebanking.user.UserRepository;
 import io.github.zhlzxa.corebanking.user.UserStatus;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.convert.converter.Converter;
@@ -43,10 +46,12 @@ public class BankJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
     static final String BRANCH_CODE_CLAIM = "branch_code";
 
     private final UserRepository userRepository;
+    private final TerminalRepository terminalRepository;
     private final JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
 
-    public BankJwtAuthenticationConverter(UserRepository userRepository) {
+    public BankJwtAuthenticationConverter(UserRepository userRepository, TerminalRepository terminalRepository) {
         this.userRepository = userRepository;
+        this.terminalRepository = terminalRepository;
     }
 
     @Override
@@ -57,12 +62,20 @@ public class BankJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
             throw new BadCredentialsException("Token has no issuer or subject");
         }
         String issuer = jwt.getIssuer().toString();
-        BankUser user = userRepository
+        Optional<BankUser> user = userRepository.findByExternalIdentity(issuer, jwt.getSubject());
+        if (user.isPresent()) {
+            return authenticateUser(jwt, issuer, user.get());
+        }
+        Terminal terminal = terminalRepository
                 .findByExternalIdentity(issuer, jwt.getSubject())
                 .orElseThrow(() -> {
                     log.info("Rejected token for an identity that is not registered with the bank");
                     return new BadCredentialsException("Unknown identity");
                 });
+        return authenticateTerminal(jwt, issuer, terminal);
+    }
+
+    private AbstractAuthenticationToken authenticateUser(Jwt jwt, String issuer, BankUser user) {
         if (user.status() == UserStatus.LOCKED) {
             throw new LockedException("User is locked");
         }
@@ -74,6 +87,21 @@ public class BankJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.role().name()));
         BankPrincipal principal = new BankPrincipal(
                 user.id(), issuer, jwt.getSubject(), user.role(), jwt.getClaimAsString(BRANCH_CODE_CLAIM));
+        return new BankAuthenticationToken(principal, jwt, List.copyOf(authorities));
+    }
+
+    /**
+     * A terminal authenticates with its own client-credentials token and receives the role {@code
+     * ATM}. It never receives a bank user role, so it cannot use customer or staff operations.
+     */
+    private AbstractAuthenticationToken authenticateTerminal(Jwt jwt, String issuer, Terminal terminal) {
+        if (!terminal.active()) {
+            throw new DisabledException("Terminal is disabled");
+        }
+        Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + TerminalPrincipal.ROLE));
+        TerminalPrincipal principal =
+                new TerminalPrincipal(terminal.id(), issuer, jwt.getSubject(), terminal.branchCode());
         return new BankAuthenticationToken(principal, jwt, List.copyOf(authorities));
     }
 }

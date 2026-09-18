@@ -39,9 +39,10 @@ public class SecurityAuditRecorder {
     /** An authenticated caller attempted an operation outside their permissions. */
     public void accessDenied(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        AuditActor actor = authentication != null && authentication.getPrincipal() instanceof BankPrincipal principal
-                ? principal.toAuditActor()
-                : AuditActor.anonymous();
+        AuditActor actor =
+                authentication != null && authentication.getPrincipal() instanceof AuditablePrincipal principal
+                        ? principal.toAuditActor()
+                        : AuditActor.anonymous();
         record(actor, AuditAction.AUTHORIZATION_DENIED, request, ErrorCode.ACCESS_DENIED);
     }
 

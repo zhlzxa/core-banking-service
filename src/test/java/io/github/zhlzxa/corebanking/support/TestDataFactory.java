@@ -100,6 +100,19 @@ public class TestDataFactory {
                 .single();
     }
 
+    public void createTerminal(String terminalId, String subject, String branchCode, String status) {
+        jdbc.sql("""
+                        INSERT INTO terminals (id, identity_issuer, identity_subject, terminal_type, branch_code, status)
+                        VALUES (:id, :issuer, :subject, 'ATM', :branch, :status)
+                        """)
+                .param("id", terminalId)
+                .param("issuer", ISSUER)
+                .param("subject", subject)
+                .param("branch", branchCode)
+                .param("status", status)
+                .update();
+    }
+
     public void setStatus(long accountId, String status, String reason) {
         jdbc.sql("UPDATE accounts SET status = :status, status_reason = :reason WHERE id = :id")
                 .param("id", accountId)
