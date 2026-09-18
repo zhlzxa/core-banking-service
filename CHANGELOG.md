@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-18
+
 ### Added
 
 - Spring Boot 4 project skeleton on Java 21 with the Maven wrapper.
@@ -16,3 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Dependabot updates.
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
+
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/zhlzxa/core-banking-service/releases/tag/v0.1.0
