@@ -2,13 +2,13 @@ package io.github.zhlzxa.corebanking.web;
 
 import io.github.zhlzxa.corebanking.common.error.BusinessException;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
-import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -21,24 +21,25 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * Translates exceptions into RFC 9457 problem responses.
+ * Translates exceptions raised while handling a request into RFC 9457 problem responses.
  *
- * <p>Every error body carries a stable {@code code} property that clients can branch on. Details
- * are fixed sentences: exception messages from infrastructure, SQL, stack traces and echoed client
- * input never reach the response.
+ * <p>Every error body carries a stable {@code code} property that clients can branch on, and the
+ * request's {@code correlationId} for support enquiries. Details are fixed sentences: exception
+ * messages from infrastructure, SQL, stack traces and echoed client input never reach the
+ * response. The complete catalogue is documented in {@code docs/api-errors.md}.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
-    private static final String PROBLEM_TYPE_BASE = "https://corebanking.example/problems/";
 
     @ExceptionHandler(BusinessException.class)
     ResponseEntity<ProblemDetail> handleBusinessException(BusinessException ex) {
-        return respond(problem(ex.errorCode(), ex.getMessage()));
+        return respond(ProblemDetails.of(ex.errorCode(), ex.getMessage()));
     }
 
     /**
@@ -47,43 +48,53 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
-        return respond(problem(ErrorCode.ACCESS_DENIED, "The caller is not permitted to perform this operation"));
+        return respond(
+                ProblemDetails.of(ErrorCode.ACCESS_DENIED, "The caller is not permitted to perform this operation"));
     }
 
     @ExceptionHandler(AuthenticationException.class)
     ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex) {
-        return respond(problem(ErrorCode.UNAUTHENTICATED, "Authentication is required"));
+        return respond(ProblemDetails.of(ErrorCode.UNAUTHENTICATED, "Authentication is required"));
     }
 
+    /** Last resort: the cause is logged with the correlation id, the client only learns that it failed. */
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> handleUnexpected(Exception ex) {
-        log.error("Unhandled exception", ex);
-        return respond(problem(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred"));
+        log.error("Unhandled exception while processing request", ex);
+        return respond(ProblemDetails.of(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred"));
     }
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemDetail body = problem(ErrorCode.VALIDATION_FAILED, "One or more fields are invalid");
         List<Map<String, String>> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> Map.of(
-                        "field", error.getField(),
-                        "reason", String.valueOf(error.getDefaultMessage())))
+                .map(error -> fieldError(error.getField(), error))
                 .toList();
-        body.setProperty("errors", errors);
-        return ResponseEntity.status(body.getStatus()).body(body);
+        return validationFailed(errors);
+    }
+
+    /** Violations of constraints declared on handler method parameters, such as query parameters. */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        List<Map<String, String>> errors = new ArrayList<>();
+        ex.getParameterValidationResults().forEach(result -> {
+            String name = result.getMethodParameter().getParameterName();
+            result.getResolvableErrors().forEach(error -> errors.add(fieldError(name, error)));
+        });
+        return validationFailed(errors);
     }
 
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemDetail body = problem(ErrorCode.MALFORMED_REQUEST, "The request body could not be read");
+        ProblemDetail body = ProblemDetails.of(ErrorCode.MALFORMED_REQUEST, "The request body could not be read");
         return ResponseEntity.status(body.getStatus()).body(body);
     }
 
     /**
-     * Adds a {@code code} to the problem bodies Spring MVC creates for protocol-level errors such as
-     * 405 or 415. Those use the HTTP status name as their code.
+     * Completes the problem bodies Spring MVC creates for protocol-level errors such as 404, 405 or
+     * 415. Those use the HTTP status name as their code.
      */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
@@ -94,17 +105,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 HttpStatus resolved = HttpStatus.resolve(statusCode.value());
                 problem.setProperty("code", resolved != null ? resolved.name() : "HTTP_" + statusCode.value());
             }
+            ProblemDetails.withCorrelationId(problem);
         }
         return response;
     }
 
-    private static ProblemDetail problem(ErrorCode code, String detail) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(code.httpStatus(), detail);
-        problem.setType(URI.create(
-                PROBLEM_TYPE_BASE + code.name().toLowerCase(Locale.ROOT).replace('_', '-')));
-        problem.setTitle(code.title());
-        problem.setProperty("code", code.name());
-        return problem;
+    /** Only the constraint's generic message is returned; the rejected value is never echoed. */
+    private static Map<String, String> fieldError(@Nullable String field, MessageSourceResolvable error) {
+        return Map.of("field", String.valueOf(field), "reason", String.valueOf(error.getDefaultMessage()));
+    }
+
+    private static ResponseEntity<Object> validationFailed(List<Map<String, String>> errors) {
+        ProblemDetail body = ProblemDetails.of(ErrorCode.VALIDATION_FAILED, "One or more fields are invalid");
+        body.setProperty("errors", errors);
+        return ResponseEntity.status(body.getStatus()).body(body);
     }
 
     private static ResponseEntity<ProblemDetail> respond(ProblemDetail problem) {

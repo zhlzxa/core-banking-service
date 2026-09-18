@@ -20,7 +20,11 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, BankJwtAuthenticationConverter jwtConverter)
+    SecurityFilterChain apiSecurityFilterChain(
+            HttpSecurity http,
+            BankJwtAuthenticationConverter jwtConverter,
+            ProblemAuthenticationEntryPoint authenticationEntryPoint,
+            ProblemAccessDeniedHandler accessDeniedHandler)
             throws Exception {
         http
                 // The API is stateless and authenticates with bearer tokens in the Authorization
@@ -33,7 +37,12 @@ public class SecurityConfig {
                                 .permitAll()
                                 .anyRequest()
                                 .authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter)));
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtConverter))
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler));
         return http.build();
     }
 }
