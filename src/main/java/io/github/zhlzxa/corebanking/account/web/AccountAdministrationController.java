@@ -5,9 +5,13 @@ import io.github.zhlzxa.corebanking.account.AccountAdministrationService;
 import io.github.zhlzxa.corebanking.account.StatusReason;
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.common.money.MoneyFormatter;
 import io.github.zhlzxa.corebanking.security.BankPrincipal;
+import io.github.zhlzxa.corebanking.web.ApiErrors;
 import io.github.zhlzxa.corebanking.web.CorrelationId;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Back-office account operations. Requires the ADMIN role and the bank.accounts.admin scope. */
+@Tag(name = "Account administration", description = "Back-office account controls; ADMIN role")
 @RestController
 @RequestMapping("/admin/accounts/{accountId}")
 public class AccountAdministrationController {
@@ -72,6 +77,8 @@ public class AccountAdministrationController {
         }
     }
 
+    @Operation(summary = "Block outgoing movements, with a reason")
+    @ApiErrors({ErrorCode.ACCOUNT_NOT_FOUND, ErrorCode.INVALID_ACCOUNT_STATE})
     @PostMapping("/freeze")
     public AdminAccountResponse freeze(
             @AuthenticationPrincipal BankPrincipal caller,
@@ -80,16 +87,22 @@ public class AccountAdministrationController {
         return AdminAccountResponse.from(administrationService.freeze(audit(caller), accountId, request.reason()));
     }
 
+    @Operation(summary = "Lift a freeze")
+    @ApiErrors({ErrorCode.ACCOUNT_NOT_FOUND, ErrorCode.INVALID_ACCOUNT_STATE})
     @PostMapping("/unfreeze")
     public AdminAccountResponse unfreeze(@AuthenticationPrincipal BankPrincipal caller, @PathVariable long accountId) {
         return AdminAccountResponse.from(administrationService.unfreeze(audit(caller), accountId));
     }
 
+    @Operation(summary = "Close an account with a zero balance")
+    @ApiErrors({ErrorCode.ACCOUNT_NOT_FOUND, ErrorCode.INVALID_ACCOUNT_STATE})
     @PostMapping("/close")
     public AdminAccountResponse close(@AuthenticationPrincipal BankPrincipal caller, @PathVariable long accountId) {
         return AdminAccountResponse.from(administrationService.close(audit(caller), accountId));
     }
 
+    @Operation(summary = "Set the per-transaction and daily transfer limits")
+    @ApiErrors({ErrorCode.ACCOUNT_NOT_FOUND, ErrorCode.INVALID_ACCOUNT_STATE})
     @PutMapping("/limits")
     public AdminAccountResponse changeLimits(
             @AuthenticationPrincipal BankPrincipal caller,

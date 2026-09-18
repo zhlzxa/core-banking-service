@@ -1,7 +1,11 @@
 package io.github.zhlzxa.corebanking.account.web;
 
 import io.github.zhlzxa.corebanking.account.AccountQueryService;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.security.BankPrincipal;
+import io.github.zhlzxa.corebanking.web.ApiErrors;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -14,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Read-only views of the caller's own accounts. */
+@Tag(name = "Accounts", description = "The caller's accounts, balances and history")
 @RestController
 @RequestMapping("/accounts")
 public class AccountController {
@@ -24,6 +29,7 @@ public class AccountController {
         this.accountQueryService = accountQueryService;
     }
 
+    @Operation(summary = "List the caller's accounts and balances")
     @GetMapping
     public List<AccountResponse> listAccounts(@AuthenticationPrincipal BankPrincipal caller) {
         return accountQueryService.listAccounts(caller.userId()).stream()
@@ -31,6 +37,8 @@ public class AccountController {
                 .toList();
     }
 
+    @Operation(summary = "Get one of the caller's accounts")
+    @ApiErrors({ErrorCode.ACCOUNT_NOT_FOUND})
     @GetMapping("/{accountId}")
     public AccountResponse getAccount(@AuthenticationPrincipal BankPrincipal caller, @PathVariable long accountId) {
         return AccountResponse.from(accountQueryService.getAccount(caller.userId(), accountId));
@@ -40,6 +48,8 @@ public class AccountController {
      * Returns the account's transactions, newest first. Pass the {@code nextCursor} of a response as
      * {@code cursor} to fetch the following page.
      */
+    @Operation(summary = "List an account's transactions, newest first, cursor-paginated")
+    @ApiErrors({ErrorCode.ACCOUNT_NOT_FOUND, ErrorCode.INVALID_CURSOR})
     @GetMapping("/{accountId}/transactions")
     public TransactionHistoryResponse history(
             @AuthenticationPrincipal BankPrincipal caller,

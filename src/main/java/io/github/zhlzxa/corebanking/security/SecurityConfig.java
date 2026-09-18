@@ -42,6 +42,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus")
                         .permitAll()
+                        // The API description, when enabled, documents the API but grants nothing:
+                        // every operation it describes still requires a token.
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
+                        .permitAll()
                         .requestMatchers("/atm/**")
                         .hasRole(TerminalPrincipal.ROLE)
                         .anyRequest()

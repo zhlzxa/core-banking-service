@@ -5,10 +5,15 @@ import io.github.zhlzxa.corebanking.cash.CashCommand;
 import io.github.zhlzxa.corebanking.cash.TellerCashService;
 import io.github.zhlzxa.corebanking.cash.WithdrawalApproval;
 import io.github.zhlzxa.corebanking.cash.WithdrawalResult;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.common.money.MoneyFormatter;
 import io.github.zhlzxa.corebanking.security.BankPrincipal;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
+import io.github.zhlzxa.corebanking.web.ApiErrors;
 import io.github.zhlzxa.corebanking.web.CorrelationId;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -33,6 +38,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Cash operations performed by tellers at a branch counter. */
+@Tag(name = "Teller cash", description = "Cash at a branch counter; TELLER role")
 @RestController
 @RequestMapping("/teller")
 public class CashController {
@@ -110,6 +116,16 @@ public class CashController {
         }
     }
 
+    @Operation(summary = "Credit cash received at the counter")
+    @ApiResponse(responseCode = "201", description = "Deposit completed")
+    @ApiErrors({
+        ErrorCode.INVALID_AMOUNT_SCALE,
+        ErrorCode.CURRENCY_NOT_SUPPORTED,
+        ErrorCode.ACCOUNT_NOT_FOUND,
+        ErrorCode.CURRENCY_MISMATCH,
+        ErrorCode.DESTINATION_ACCOUNT_CLOSED,
+        ErrorCode.IDEMPOTENCY_KEY_REUSED
+    })
     @PostMapping("/deposits")
     @ResponseStatus(HttpStatus.CREATED)
     public CashResponse deposit(
@@ -122,6 +138,18 @@ public class CashController {
      * Pays out cash, answering 201 with the transaction. If the amount needs a second teller's
      * approval, nothing is paid out yet and the answer is 202 with the approval to be decided.
      */
+    @Operation(summary = "Pay out cash; large amounts need a second teller's approval")
+    @ApiResponse(responseCode = "201", description = "Cash paid out")
+    @ApiResponse(responseCode = "202", description = "Awaiting a second teller's approval; nothing paid out yet")
+    @ApiErrors({
+        ErrorCode.INVALID_AMOUNT_SCALE,
+        ErrorCode.CURRENCY_NOT_SUPPORTED,
+        ErrorCode.ACCOUNT_NOT_FOUND,
+        ErrorCode.INSUFFICIENT_BALANCE,
+        ErrorCode.CURRENCY_MISMATCH,
+        ErrorCode.SOURCE_ACCOUNT_NOT_ACTIVE,
+        ErrorCode.IDEMPOTENCY_KEY_REUSED
+    })
     @PostMapping("/withdrawals")
     public ResponseEntity<?> withdraw(
             @AuthenticationPrincipal BankPrincipal caller, @Valid @RequestBody CashRequest request) {
@@ -138,11 +166,23 @@ public class CashController {
         };
     }
 
+    @Operation(summary = "Get a withdrawal approval")
+    @ApiErrors({ErrorCode.APPROVAL_NOT_FOUND})
     @GetMapping("/approvals/{approvalId}")
     public ApprovalResponse getApproval(@PathVariable long approvalId) {
         return ApprovalResponse.from(tellerCashService.getApproval(approvalId));
     }
 
+    @Operation(summary = "Approve and pay out a pending withdrawal")
+    @ApiResponse(responseCode = "201", description = "Cash paid out")
+    @ApiErrors({
+        ErrorCode.APPROVAL_NOT_FOUND,
+        ErrorCode.FOUR_EYES_REQUIRED,
+        ErrorCode.APPROVAL_NOT_PENDING,
+        ErrorCode.APPROVAL_EXPIRED,
+        ErrorCode.INSUFFICIENT_BALANCE,
+        ErrorCode.SOURCE_ACCOUNT_NOT_ACTIVE
+    })
     @PostMapping("/approvals/{approvalId}/approve")
     @ResponseStatus(HttpStatus.CREATED)
     public CashResponse approve(@AuthenticationPrincipal BankPrincipal caller, @PathVariable long approvalId) {
@@ -150,6 +190,13 @@ public class CashController {
         return CashResponse.from(withdrawal, withdrawal.fromAccountId());
     }
 
+    @Operation(summary = "Decline a pending withdrawal")
+    @ApiErrors({
+        ErrorCode.APPROVAL_NOT_FOUND,
+        ErrorCode.FOUR_EYES_REQUIRED,
+        ErrorCode.APPROVAL_NOT_PENDING,
+        ErrorCode.APPROVAL_EXPIRED
+    })
     @PostMapping("/approvals/{approvalId}/reject")
     public ApprovalResponse reject(@AuthenticationPrincipal BankPrincipal caller, @PathVariable long approvalId) {
         return ApprovalResponse.from(tellerCashService.reject(audit(caller), caller.userId(), approvalId));

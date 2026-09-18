@@ -42,6 +42,21 @@ jobs:
             target/site/jacoco/
           retention-days: 14
 
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # Builds the image to keep the Dockerfile working; images are not
+      # published from this repository.
+      - name: Build image
+        run: docker build --tag core-banking-service:ci .
+
+      - name: Check that the image runs as an unprivileged user
+        run: test "$(docker image inspect --format '{{.Config.User}}' core-banking-service:ci)" = corebanking
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

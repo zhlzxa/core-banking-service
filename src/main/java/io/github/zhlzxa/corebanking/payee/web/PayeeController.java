@@ -2,12 +2,17 @@ package io.github.zhlzxa.corebanking.payee.web;
 
 import io.github.zhlzxa.corebanking.audit.AuditChannel;
 import io.github.zhlzxa.corebanking.audit.AuditContext;
+import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.payee.Payee;
 import io.github.zhlzxa.corebanking.payee.PayeeService;
 import io.github.zhlzxa.corebanking.payee.web.PayeeRequests.AddPayeeRequest;
 import io.github.zhlzxa.corebanking.payee.web.PayeeRequests.RenamePayeeRequest;
 import io.github.zhlzxa.corebanking.security.BankPrincipal;
+import io.github.zhlzxa.corebanking.web.ApiErrors;
 import io.github.zhlzxa.corebanking.web.CorrelationId;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -25,6 +30,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** The caller's saved payees. */
+@Tag(name = "Payees", description = "The caller's saved payees")
 @RestController
 @RequestMapping("/payees")
 public class PayeeController {
@@ -35,6 +41,7 @@ public class PayeeController {
         this.payeeService = payeeService;
     }
 
+    @Operation(summary = "List the caller's payees")
     @GetMapping
     public List<PayeeResponse> list(@AuthenticationPrincipal BankPrincipal caller) {
         return payeeService.list(caller.userId()).stream()
@@ -42,6 +49,9 @@ public class PayeeController {
                 .toList();
     }
 
+    @Operation(summary = "Save a payee")
+    @ApiResponse(responseCode = "201", description = "Payee saved")
+    @ApiErrors({ErrorCode.PAYEE_ALREADY_EXISTS})
     @PostMapping
     public ResponseEntity<PayeeResponse> add(
             @AuthenticationPrincipal BankPrincipal caller, @Valid @RequestBody AddPayeeRequest request) {
@@ -49,6 +59,8 @@ public class PayeeController {
         return ResponseEntity.created(URI.create("/payees/" + payee.getId())).body(PayeeResponse.from(payee));
     }
 
+    @Operation(summary = "Rename a payee; requires the version last read")
+    @ApiErrors({ErrorCode.PAYEE_NOT_FOUND, ErrorCode.CONCURRENT_MODIFICATION})
     @PatchMapping("/{payeeId}")
     public PayeeResponse rename(
             @AuthenticationPrincipal BankPrincipal caller,
@@ -59,6 +71,9 @@ public class PayeeController {
         return PayeeResponse.from(payee);
     }
 
+    @Operation(summary = "Remove a payee")
+    @ApiResponse(responseCode = "204", description = "Payee removed")
+    @ApiErrors({ErrorCode.PAYEE_NOT_FOUND})
     @DeleteMapping("/{payeeId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(@AuthenticationPrincipal BankPrincipal caller, @PathVariable long payeeId) {

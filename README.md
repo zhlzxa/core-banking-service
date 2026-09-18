@@ -7,28 +7,62 @@ genuinely hard to get right: atomic money movement on a double-entry
 ledger, idempotent payment APIs, concurrency control and an auditable
 record of every business action.
 
-**Stack:** Java 21 · Spring Boot 4 · PostgreSQL 17 · JDBC and JPA · Flyway · Kafka · Testcontainers · Docker
-
-> **Status:** under active development. See [CHANGELOG.md](CHANGELOG.md)
-> for what has been delivered so far.
+**Stack:** Java 21 · Spring Boot 4 · PostgreSQL 17 · JDBC and JPA · Flyway · Kafka · OAuth2/OIDC · Micrometer · Testcontainers · Docker
 
 ## Quick start
 
-Prerequisites: JDK 21 and Docker.
+Prerequisites: Docker, and a Bash shell with `curl` and `openssl`.
 
 ```bash
-# Build and run all unit and integration tests (starts PostgreSQL and Kafka in containers)
-./mvnw verify
+demo/up.sh                      # build the image; start PostgreSQL, Kafka and the service with sample data
+demo/idempotency.sh             # a retried transfer executes once
+demo/insufficient-balance.sh    # a rejected transfer leaves no trace
+demo/fps-timeout.sh             # a lost FPS response is resolved by reconciliation, never refunded
+demo/four-eyes-withdrawal.sh    # a large cash withdrawal needs a second teller
+docker compose --profile demo down
+```
 
-# Run the service locally against the compose database and broker and an OIDC provider
-docker compose up -d postgres kafka
+Swagger UI is at <http://localhost:8080/swagger-ui.html>; `demo/token.sh`
+prints a token to paste into it. Probes and metrics are on the management
+port: <http://localhost:8081/actuator/prometheus>. The demo signs its own
+tokens with a key pair generated locally by `demo/generate-keys.sh`; no
+real environment trusts it.
+
+To build and run the tests (JDK 21; PostgreSQL and Kafka start in containers):
+
+```bash
+./mvnw verify
+```
+
+To run the service from the IDE against the compose database and broker and
+an external OpenID Connect provider:
+
+```bash
+docker compose up -d
 export OIDC_ISSUER_URI=https://idp.example.com/realms/bank OIDC_AUDIENCE=core-banking-api
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
-The API listens on port 8080. Probes and metrics are on the management port
-8081: `/actuator/health/liveness`, `/actuator/health/readiness` and
-`/actuator/prometheus`.
+## Architecture
+
+```mermaid
+flowchart LR
+    clients([Customers, tellers,<br/>ATMs, back office]) -- OAuth2 bearer tokens --> api
+    subgraph service [Core Banking Service]
+        api[REST API] --> posting[Posting engine<br/>locks, idempotency, limits]
+        posting --> ledger[(Ledger, audit,<br/>outbox)]
+        jobs[Reconciler and<br/>outbox publisher] --> ledger
+    end
+    ledger --- pg[(PostgreSQL)]
+    jobs -- status queries, resends --> fps[FPS]
+    api -- payments --> fps
+    jobs -- TransactionCompleted --> kafka[[Kafka]]
+```
+
+Every money movement goes through one posting engine inside one database
+transaction; calls to FPS and Kafka happen outside it. See
+[docs/architecture.md](docs/architecture.md) for the sequence of a transfer
+including its failure paths, the FPS flow and the consistency model.
 
 ## What it guarantees
 
@@ -122,6 +156,7 @@ Branch and self-service operations:
 |---|---|---|
 | `POST /teller/deposits` | `TELLER`, scope `bank.cash` | Credit cash received at the counter |
 | `POST /teller/withdrawals` | `TELLER`, scope `bank.cash` | Pay out cash; 202 with an approval when above the threshold |
+| `GET /teller/approvals/{id}` | `TELLER`, scope `bank.cash` | State of a withdrawal approval |
 | `POST /teller/approvals/{id}/approve` | another `TELLER` | Approve and pay out a pending withdrawal |
 | `POST /teller/approvals/{id}/reject` | another `TELLER` | Decline a pending withdrawal |
 | `POST /atm/withdrawals` | registered terminal, scope `bank.atm.withdraw` | Dispense cash |
@@ -181,6 +216,7 @@ binary floating point.
 
 | Document | Purpose |
 |---|---|
+| [docs/architecture.md](docs/architecture.md) | Context, modules, transfer and FPS sequences, consistency model |
 | [docs/database.md](docs/database.md) | Schema, database-enforced invariants, migrations |
 | [docs/api-errors.md](docs/api-errors.md) | Error response format, error codes and retry guidance |
 | [docs/runbook.md](docs/runbook.md) | Probes, logs, metrics, alerts and operational procedures |
@@ -188,6 +224,27 @@ binary floating point.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commit convention, coding standards |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and secret-handling rules |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
+
+## Known simplifications
+
+This is a focused core, not a complete bank. Deliberately out of scope:
+
+- **FPS is simulated.** The client behind the `FpsClient` interface accepts,
+  rejects, times out or loses payments depending on the creditor account,
+  so every path can be demonstrated. There is no ISO 20022 messaging.
+- **No identity provider is bundled.** Production expects an external OpenID
+  Connect provider; the demo signs tokens with a local key.
+- **No account opening, KYC, interest, fees, statements or foreign
+  exchange.** Accounts are seeded; a transfer is always in the account
+  currency.
+- **Escalated FPS payments are resolved outside the API.** The runbook
+  describes the controlled procedure; a back-office endpoint for it does not
+  exist yet.
+- **Rate limiting and TLS termination** are expected at the API gateway.
+- **Single database.** How the design scales out is recorded in
+  [ADR-0012](docs/adr/0012-scale-out-stateless-instances-on-one-primary-database.md).
+- **The notification consumer is an example** of an idempotent consumer, not
+  a notification system.
 
 ## License
 

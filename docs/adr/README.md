@@ -18,6 +18,7 @@ that changes is superseded by a new record.
 | [0009](0009-treat-payment-timeouts-as-unknown-and-reconcile.md) | Treat external payment timeouts as unknown and resolve them by reconciliation | Accepted |
 | [0010](0010-correct-postings-with-reversal-transactions.md) | Correct postings with reversal transactions, never by editing the ledger | Accepted |
 | [0011](0011-publish-events-through-a-transactional-outbox.md) | Publish integration events through a transactional outbox, at least once | Accepted |
+| [0012](0012-scale-out-stateless-instances-on-one-primary-database.md) | Scale out with stateless instances on one primary database; shard by account later | Accepted |
 
 ## Template
 

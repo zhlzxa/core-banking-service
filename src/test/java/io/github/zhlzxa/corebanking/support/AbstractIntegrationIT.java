@@ -46,6 +46,7 @@ public abstract class AbstractIntegrationIT {
         registry.add("corebanking.outbox.publisher.enabled", () -> "false");
         // No broker runs for most tests; tests that need Kafka start its listener themselves.
         registry.add("corebanking.notifications.enabled", () -> "false");
+        registry.add("springdoc.api-docs.enabled", () -> "true");
         // Management endpoints share the application port so that MockMvc can reach them.
         registry.add("management.server.port", () -> "8080");
         // Lets tests assert the number of SQL statements an operation issues (N+1 regressions).

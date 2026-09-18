@@ -1,7 +1,10 @@
-# Local development infrastructure. Credentials here are for a throwaway
-# local database only and must never be reused in any shared environment.
-# Ports are bound to 127.0.0.1 so the services are not reachable from the
-# network.
+# Local development and demonstration environment. Credentials here are for
+# a throwaway local database only and must never be reused in any shared
+# environment. Ports are bound to 127.0.0.1 so the services are not reachable
+# from the network.
+#
+#   docker compose up -d                 PostgreSQL and Kafka, for running the service from the IDE
+#   docker compose --profile demo up     the above plus the service itself (see demo/up.sh)
 services:
   postgres:
     image: postgres:17
@@ -19,15 +22,58 @@ services:
       timeout: 3s
       retries: 10
 
-  # Single-node Kafka in KRaft mode, for the transactional outbox.
+  # Single-node Kafka in KRaft mode, for the transactional outbox. Containers
+  # connect through kafka:19092; processes on the host through localhost:9092.
   kafka:
     image: apache/kafka:4.1.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,HOST://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     ports:
       - "127.0.0.1:9092:9092"
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
       interval: 10s
       timeout: 10s
+      retries: 10
+
+  # The service with demonstration data. Requires the local-only demo key pair
+  # created by demo/generate-keys.sh.
+  app:
+    profiles: ["demo"]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: demo
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-corebanking}
+      DB_USERNAME: ${POSTGRES_USER:-corebanking}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      OIDC_PUBLIC_KEY_LOCATION: file:/etc/corebanking/demo-public.pem
+    volumes:
+      - ./demo/keys/public.pem:/etc/corebanking/demo-public.pem:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
       retries: 10
 
 volumes:
