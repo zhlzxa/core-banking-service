@@ -63,3 +63,4 @@ units.
 | Version | Purpose |
 |---|---|
 | V1 | Core ledger: accounts, transactions, ledger entries |
+| V2 | Users identified by external (issuer, subject); account ownership; transaction initiator |

@@ -18,7 +18,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(DatabaseCleaner.class)
+@Import({DatabaseCleaner.class, TestDataFactory.class})
 public abstract class AbstractIntegrationIT {
 
     @ServiceConnection
