@@ -1,0 +1,13 @@
+package io.github.zhlzxa.corebanking.audit;
+
+/**
+ * Business actions recorded in the audit trail. Names describe what happened in business terms, not
+ * which method ran; they are stored as text and must never be renamed.
+ */
+public enum AuditAction {
+    TRANSFER_COMPLETED,
+    TRANSFER_REJECTED,
+    TRANSFER_FAILED,
+    AUTHENTICATION_FAILED,
+    AUTHORIZATION_DENIED
+}
