@@ -2,6 +2,7 @@ package io.github.zhlzxa.corebanking.transfer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
 import io.github.zhlzxa.corebanking.support.AbstractIntegrationIT;
 import io.github.zhlzxa.corebanking.support.TestAuditContexts;
 import io.github.zhlzxa.corebanking.support.TestDataFactory;

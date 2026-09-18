@@ -3,7 +3,7 @@ package io.github.zhlzxa.corebanking.audit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.zhlzxa.corebanking.transfer.InsufficientBalanceException;
+import io.github.zhlzxa.corebanking.posting.InsufficientBalanceException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
