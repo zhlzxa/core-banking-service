@@ -1,0 +1,18 @@
+package io.github.zhlzxa.corebanking.security;
+
+/**
+ * Authorization expressions used with {@code @PreAuthorize}. Each combines the OAuth scope the
+ * client application must hold with the bank role the person must have; resource ownership is
+ * checked separately by the service against the data being accessed.
+ */
+public final class Permissions {
+
+    /** Move money out of one's own accounts. */
+    public static final String CUSTOMER_TRANSFER = "hasAuthority('SCOPE_bank.transfer') and hasRole('CUSTOMER')";
+
+    /** View one's own accounts, balances, history and transfers. */
+    public static final String CUSTOMER_READ_ACCOUNTS =
+            "hasAuthority('SCOPE_bank.accounts.read') and hasRole('CUSTOMER')";
+
+    private Permissions() {}
+}

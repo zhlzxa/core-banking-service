@@ -29,9 +29,11 @@ problem document with media type `application/problem+json`.
 | 400 | `VALIDATION_FAILED` | One or more fields are missing or invalid | Correct the listed fields |
 | 400 | `MALFORMED_REQUEST` | The body is not valid JSON or has the wrong structure | Fix the request encoding |
 | 400 | `INVALID_TRANSFER` | The instruction is structurally invalid, for example source equals destination | Correct the instruction |
+| 400 | `INVALID_CURSOR` | The pagination cursor is malformed or was altered | Restart from the first page |
 | 401 | `UNAUTHENTICATED` | Token missing, invalid, expired, for another audience, or the user is unknown or inactive | Obtain a new token; do not retry blindly |
 | 403 | `ACCESS_DENIED` | The token lacks the required scope or the user lacks the required role | Request the proper scope or role |
 | 404 | `ACCOUNT_NOT_FOUND` | The account does not exist or is not visible to the caller | Check the account identifier |
+| 404 | `TRANSFER_NOT_FOUND` | The transfer does not exist or does not involve the caller's accounts | Check the transfer identifier |
 | 409 | `INSUFFICIENT_BALANCE` | The source balance does not cover the amount | Retry with the same `requestId` once funded |
 | 409 | `CURRENCY_MISMATCH` | The instruction currency differs from an account currency | Correct the currency |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | The `requestId` was already used for a different instruction | Use a new `requestId` |

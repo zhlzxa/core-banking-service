@@ -11,6 +11,7 @@ that changes is superseded by a new record.
 | [0002](0002-idempotency-through-a-unique-request-id.md) | Make money movements idempotent through a unique request id | Accepted |
 | [0003](0003-delegate-authentication-to-an-oidc-provider.md) | Delegate authentication to an OIDC provider and authorise in three layers | Accepted |
 | [0004](0004-audit-success-in-transaction-and-failure-independently.md) | Audit successes inside the business transaction and failures independently | Accepted |
+| [0005](0005-keyset-pagination-for-transaction-history.md) | Paginate transaction history with a keyset cursor instead of OFFSET | Accepted |
 
 ## Template
 

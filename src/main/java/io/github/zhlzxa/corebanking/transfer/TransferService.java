@@ -12,6 +12,7 @@ import io.github.zhlzxa.corebanking.common.error.BusinessException;
 import io.github.zhlzxa.corebanking.common.error.ErrorCode;
 import io.github.zhlzxa.corebanking.ledger.LedgerEntry;
 import io.github.zhlzxa.corebanking.ledger.LedgerRepository;
+import io.github.zhlzxa.corebanking.security.Permissions;
 import io.github.zhlzxa.corebanking.transaction.BankTransaction;
 import io.github.zhlzxa.corebanking.transaction.NewTransaction;
 import io.github.zhlzxa.corebanking.transaction.TransactionRepository;
@@ -87,7 +88,7 @@ public class TransferService {
      * @throws InsufficientBalanceException if the source balance does not cover the amount
      */
     @Transactional
-    @PreAuthorize("hasAuthority('SCOPE_bank.transfer') and hasRole('CUSTOMER')")
+    @PreAuthorize(Permissions.CUSTOMER_TRANSFER)
     public BankTransaction transfer(AuditContext audit, TransferCommand command) {
         try {
             return execute(audit, command);

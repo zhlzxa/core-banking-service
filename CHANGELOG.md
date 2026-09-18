@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-18
+
+### Added
+
+- `GET /accounts`, `GET /accounts/{id}` and `GET /transfers/{id}` for the
+  caller's own accounts and transfers, requiring scope `bank.accounts.read`.
+- `GET /accounts/{id}/transactions` with keyset (cursor) pagination, stable
+  under concurrent inserts and constant cost per page.
+- Indexes for the account, history, ledger and audit read paths, each mapped
+  to the query it serves.
+- ADR-0005 on keyset pagination; manual query-plan investigation test.
+
+### Changed
+
+- `POST /transfers` returns a `Location` header for the created transfer.
+
 ## [0.5.0] - 2026-09-18
 
 ### Added
@@ -93,7 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose definition for a local PostgreSQL 17 instance.
 - Contribution guide, security policy and pull request template.
 
-[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/zhlzxa/core-banking-service/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/zhlzxa/core-banking-service/compare/v0.2.0...v0.3.0
