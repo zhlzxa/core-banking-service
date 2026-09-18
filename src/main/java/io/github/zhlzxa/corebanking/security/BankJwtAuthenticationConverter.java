@@ -39,6 +39,9 @@ public class BankJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
 
     private static final Logger log = LoggerFactory.getLogger(BankJwtAuthenticationConverter.class);
 
+    /** Claim naming the branch a member of staff is signed in at. */
+    static final String BRANCH_CODE_CLAIM = "branch_code";
+
     private final UserRepository userRepository;
     private final JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
 
@@ -69,7 +72,8 @@ public class BankJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
 
         Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.role().name()));
-        BankPrincipal principal = new BankPrincipal(user.id(), issuer, jwt.getSubject(), user.role());
+        BankPrincipal principal = new BankPrincipal(
+                user.id(), issuer, jwt.getSubject(), user.role(), jwt.getClaimAsString(BRANCH_CODE_CLAIM));
         return new BankAuthenticationToken(principal, jwt, List.copyOf(authorities));
     }
 }

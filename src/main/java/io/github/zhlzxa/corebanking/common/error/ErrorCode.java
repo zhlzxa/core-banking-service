@@ -17,6 +17,7 @@ public enum ErrorCode {
     INVALID_TRANSFER(HttpStatus.BAD_REQUEST, "Invalid transfer"),
     INVALID_CURSOR(HttpStatus.BAD_REQUEST, "Invalid cursor"),
     INVALID_AMOUNT_SCALE(HttpStatus.BAD_REQUEST, "Invalid amount scale"),
+    CURRENCY_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "Currency not supported"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "Account not found"),
     TRANSFER_NOT_FOUND(HttpStatus.NOT_FOUND, "Transfer not found"),
     PAYEE_NOT_FOUND(HttpStatus.NOT_FOUND, "Payee not found"),
