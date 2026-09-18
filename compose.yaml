@@ -1,6 +1,6 @@
 # Local development infrastructure. Credentials here are for a throwaway
 # local database only and must never be reused in any shared environment.
-# Ports are bound to 127.0.0.1 so the database is not reachable from the
+# Ports are bound to 127.0.0.1 so the services are not reachable from the
 # network.
 services:
   postgres:
@@ -17,6 +17,17 @@ services:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
+      retries: 10
+
+  # Single-node Kafka in KRaft mode, for the transactional outbox.
+  kafka:
+    image: apache/kafka:4.1.0
+    ports:
+      - "127.0.0.1:9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 10s
+      timeout: 10s
       retries: 10
 
 volumes:
