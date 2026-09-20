@@ -221,7 +221,7 @@ binary floating point.
 | [docs/api-errors.md](docs/api-errors.md) | Error response format, error codes and retry guidance |
 | [docs/runbook.md](docs/runbook.md) | Probes, logs, metrics, alerts and operational procedures |
 | [docs/adr](docs/adr/README.md) | Architecture decision records |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Branching, commit convention, coding standards |
+| [docs/engineering-conventions.md](docs/engineering-conventions.md) | The rules this repository is held to: branching, commit convention, coding standards |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and secret-handling rules |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 

@@ -1,8 +1,13 @@
-# Contributing
+# Engineering conventions
 
-This document defines how changes are made to this repository. The rules
-exist so that the history of a financial system stays reviewable and
-auditable.
+**This is a single-author project and it does not take outside contributions.**
+Pull requests will be closed without review, and issues are turned off. The
+repository is published to be read, not to be worked on.
+
+What follows is the set of rules I hold myself to while working on it. They are
+written down for two reasons: the history of a financial system has to stay
+reviewable and auditable, and a rule that exists only in my head is one I will
+quietly drop on a busy day.
 
 ## Branching model
 
