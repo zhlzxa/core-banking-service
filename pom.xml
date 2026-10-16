@@ -29,7 +29,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <springdoc.version>3.1.1</springdoc.version>
-        <spotless.version>3.10.2</spotless.version>
+        <spotless.version>3.10.4</spotless.version>
         <palantir-java-format.version>2.98.0</palantir-java-format.version>
         <jacoco.version>0.8.15</jacoco.version>
         <jacoco.line-coverage.minimum>0.80</jacoco.line-coverage.minimum>
